@@ -60,6 +60,14 @@ single-digit share of Chrome desktop users who *also* read multilingual group
 chats, the right move is to stay unlisted, hand the zip to a few people, and
 spend those weeks elsewhere.
 
+**And it is answerable for free, so the question stops being rhetorical.** It
+isn't externally knowable — Chrome doesn't publish it — but A has to call
+`availability()` to function at all. Log the distribution of the four states
+across real machines (counter only, no content, within §5), ship A to myself and
+a handful of friends, and by the time the B decision comes up a month later there
+are real numbers from real hardware instead of an inference from a documented
+spec §4.1 already suspects is over-strict. One line in Phase 2 (§9).
+
 Note the interaction with §8: "spend the store weeks on the bot instead" is only
 attractive if the bot has economics, which is exactly what §8 now questions.
 **Taken together, §1 and §8 argue for a smaller v1 than either does alone** — the
@@ -77,6 +85,34 @@ bot deferred behind evidence.
    (§8).
 3. **Mechanism.** Can injected nodes stay attached and correct through a
    virtualized, frequently-redesigned UI? Cheapest of the three; one day (§9).
+
+---
+
+## 3. Product shape
+
+Restored in v3.1: the compression through v2→v3 dropped this section entirely,
+leaving fourteen sections of justification for a product the document no longer
+described. Each revision answered objections, and the parts nobody objected to
+atrophied.
+
+**Inbound (the core).** Translations render **underneath** the original message,
+never replacing or hiding it — dimmer, slightly indented, with a language badge
+(`ES → EN`). This is the most important decision in the document: mistranslation
+is inevitable, so keeping the source visible is what makes it survivable, lets
+bilingual readers ignore the layer, and is what gives §12's false-negative
+criterion something to be false about.
+
+**Modes.** Auto (everything not in my known-languages list), on-demand (hover
+globe, available on *every* message — see §12), and per-channel settings keyed by
+(platform, guild, channel).
+
+**Outbound (Phase 4).** I type in English, hotkey, get the translation in the
+composer **for review before sending** — never auto-send. See §9 Phase 4 for what
+review can and cannot catch.
+
+**Context handling** is a hypothesis, not a commitment: §6 tests whether thread
+context measurably improves output, and §5.1 constrains where it may be used
+regardless of the answer.
 
 ---
 
@@ -127,11 +163,23 @@ confirms behaviour in an extension service worker and an offscreen document.
 ### 4.3 Provider routing
 
 ```
-detect → known language                    → skip, no cost
-       → pair available on-device          → on-device
-       → quality tier enabled (BYO key)    → DeepL / Google
-       → else                              → "no provider for es→pt" (rare in A)
+detect → known language                      → skip, no cost
+       → availability 'available'            → on-device
+       → availability 'downloadable' |
+                      'downloading'          → PROMPT for pack download. STOP.
+                                                Never falls through.
+       → availability 'unavailable' and
+         quality tier enabled (BYO key)      → DeepL / Google
+       → else                                → "no provider for es→pt" (rare in A)
 ```
+
+**`downloadable` is its own terminal branch, and this is safety-critical.**
+§4.1 gives four availability states; collapsing them to a boolean means a user
+who enabled cloud and hasn't yet clicked through a pack download would silently
+have their messages sent to DeepL — on the automatic path, for a pair that was
+going to be free and local. That is exactly the event §5 exists to bound,
+reached by falling through a table rather than by anyone deciding it. Asserted
+in a test (§12).
 
 **The LLM is never on the automatic path.** It is a per-message "translate
 properly" button on the layer, used when the cheap path produced something
@@ -237,6 +285,19 @@ whatever number I was hoping for.
    languages that dominate my channels. This is the only method that credibly
    rates *register*, which for casual chat matters as much as meaning. One
    afternoon each, and the cheapest honest option by a wide margin.
+
+   **With a paid fallback, because two unpaid favours is a single point of
+   failure for a 7–8 week project.** If the friends don't materialise or drift,
+   Prolific or Upwork will buy a couple of hundred careful ratings in a common
+   pair for roughly $50–100. Against 7–8 weeks that is nothing, and it converts
+   a dependency on goodwill into a purchase.
+
+   **If rater time is the constraint, invert the order.** The sentence-level
+   pass needs hours of rater attention; the comprehension check (3, below) needs
+   about one — a bilingual person reads the same hour of channel and says what
+   happened, and I compare it against my notes from the translated version. It
+   also tests the product claim directly rather than a proxy. Run comprehension
+   first, and go to sentence-level only when it comes back ambiguous.
 2. **LLM-as-judge on (original, translation) — supporting, for the on-device and
    DeepL tiers only.** Defensible there because the judge is a different system.
    **Explicitly not used to rate the LLM tier** — that's circular.
@@ -261,6 +322,16 @@ Instead:
 - **Obviously bad** → stop.
 - **Marginal** → *stop.* Marginal quality will not survive real use, and
   "marginal" is the result most likely to be argued into a green light.
+
+**DNT spans must be masked before the corpus reaches any engine.** §12 requires
+100% of DNT spans intact, but masking is Phase 2 work and 0b would otherwise run
+raw messages through raw engines: every engine mangles `@handles`,
+`:custom_emoji:` and code spans when nothing is masking them, so a rater would
+mark all four candidates down for the unmasked baseline rather than for anything
+the engines did. Masking is cheap and already needed, so 0b runs the real
+masking code (`@polyglot/core`) over the corpus and measures placeholder
+survival separately from translation quality. The rubric rates **meaning and
+register only**; DNT is a mechanical pass/fail counted by the harness.
 
 Also counted in this phase, free: **code-switching frequency** (§4.5) and
 **self-hosted MT quality** (§8).
@@ -315,9 +386,23 @@ generalized them. Stated properly:
    §4.6 and it is what makes the cost bounded by *interest* rather than by
    traffic. Eager translation is the unaffordable mode; treat it as opt-in per
    group, off by default.
-2. **Self-hosted MT** (NLLB-200 distilled, Opus-MT via CTranslate2) on a small
-   box, restoring free-at-the-margin — pay for the box, not per character. It
-   also keeps content off third-party APIs, though not off my server.
+2. **Self-hosted MT** on a small box, restoring free-at-the-margin — pay for the
+   box, not per character. It also keeps content off third-party APIs, though
+   not off my server.
+
+   **NLLB and Opus-MT are not interchangeable, and the difference is the
+   hosting story:**
+
+   | | NLLB-200 distilled (600M) | Opus-MT |
+   |---|---|---|
+   | Shape | One multilingual model | One model per pair |
+   | Resident | ~2.5 GB | ~300 MB each |
+   | Non-English pairs | Direct | Per-pair, or pivot |
+   | Unpredictable language mix | Handles it | Preload a matrix, or eat cold starts |
+
+   A bot's whole premise is arbitrary groups with arbitrary language mixes, so
+   **take NLLB for the bake-off** unless the target languages turn out to be
+   known and few.
 
 **Decided in Phase 0b, eight weeks early, for the cost of one afternoon:** add
 self-hosted NLLB/Opus-MT as a fourth engine in the bake-off. If it clears the
@@ -360,14 +445,44 @@ workstreams were added to it. The download UX alone is most of a week.*
 ### Phase 2 — Make it good (2 weeks)
 Detection rules; DNT masking; viewport gating and batching; per-channel
 settings; hover translate **on every message including skipped ones** (§12);
-LLM escalation button; context bound in code (§5.1); adapter-broken state (§10).
+LLM escalation button; context bound in code (§5.1); adapter-broken state (§10);
+**`availability()` distribution telemetry** (§2) — counter only, no content,
+fully within §5.
 
 ### Phase 3 — Telegram bot (3–4 weeks, **gated on §8**)
 Only if 0b showed self-hosted MT clears the bar, or I accept a paid cloud
 product. Demand-gated by default.
 
-### Phase 4 — Outbound (2 weeks)
-Composer translation with back-translation review; glossary; quota meter.
+### Phase 4 — Outbound (2 weeks) — *the honest cut if the timeline slips*
+Composer translation; glossary; quota meter.
+
+**Back-translation review is not a safety guarantee, and the plan must not
+pretend otherwise.** §6 rejects back-translation as a *measurement* because a
+fluent-but-wrong translation back-translates fluently. Per-message
+sanity-checking is a softer use — it does catch gross failures like flipped
+negation, wrong entity and nonsense — but it misses exactly the fluent-wrong
+case, while being the only review step between me and publishing text under my
+name, to a group, in a language I cannot read. So: **outbound will occasionally
+post something wrong that back-translation passed.**
+
+The mitigation, restored from v1 where the same compression dropped it:
+**append the original.**
+
+```
+¿Vienes mañana?
+
+> (EN) Are you coming tomorrow?
+```
+
+Any bilingual reader in the group then sees both and resolves it. That is
+strictly better than back-translation, costs nothing, and makes a bad
+translation self-correcting rather than silently wrong. On by default.
+
+**Why this is the cut.** §1 defines A's success as *"I read my channels"*, and
+§3's uncertainties don't include writing. Two of A's 7–8 weeks go to the one
+feature A isn't justified by. It is also the direction 0b doesn't test — 0b
+rates `N → en`; outbound is `en → N`, a different direction with a different
+failure profile, judged by people who aren't in the bake-off.
 
 ### Phase 5 — Public release (**decision, then 4–8 weeks**)
 Not automatic. Gated on §2: estimate the qualifying share of users first. If
@@ -407,19 +522,14 @@ keys.
 
 The provider/routing/cache package is shared by the extension and the bot — but
 v2 asserted that on day one without noticing that **its primary branch doesn't
-exist in one consumer and its cost assumptions hold in only one** (§8). So the
-package takes both as **injected policy**, not built-in behaviour:
+exist in one consumer and its cost assumptions hold in only one** (§8). So, as a
+constraint rather than a committed interface — the second consumer may never
+exist (§8), and designing its API now would be building for a hypothetical:
 
-```ts
-createTranslationCore({
-  providers: Provider[],        // may or may not include on-device
-  gate: GatingPolicy,           // viewport (extension) | demand (bot)
-  cache: CacheAdapter,          // IndexedDB | server-side store
-})
-```
-
-No `if (onDevice)` inside the package, and no assumption that something upstream
-has already decided a message is worth translating.
+- **No `if (onDevice)` inside the package.** The provider set is passed in and
+  may not contain an on-device provider at all.
+- **No assumption that gating already happened.** The caller decides whether a
+  message is worth translating (viewport for the extension, demand for the bot).
 
 ---
 
@@ -446,11 +556,15 @@ has already decided a message is worth translating.
 ## 13. First actions
 
 1. Finish 0a: low-spec behaviour, worker-context confirmation, live pair list.
-2. Line up **two bilingual raters** (§6). This is the long-lead item — everything
-   waits on it, and it is the thing v2 assumed away.
+2. Line up **two bilingual raters** (§6) — the long-lead item everything waits
+   on. Start the paid fallback in parallel rather than after they fall through.
 3. Collect the corpus **with context**, authors stripped, from a channel I'm
-   comfortable exporting (§5.2).
-4. Stand up self-hosted NLLB/Opus-MT as the fourth bake-off engine (§8).
+   comfortable exporting (§5.2). Mask it with `@polyglot/core` before it reaches
+   any engine (§6).
+4. Stand up **self-hosted NLLB-200 distilled** as the fourth bake-off engine
+   (§8). Budget **one to two days**, not an afternoon: model download, Python
+   env, CTranslate2 conversion, tokenizer setup, a working inference loop. Still
+   eight weeks early, but it isn't a checkbox.
 5. Run the bake-off. **Marginal means stop.**
 
 ---
@@ -467,6 +581,19 @@ of the service worker (built-in APIs are unavailable in worker contexts —
 found by checking the API first, which the reordering was supposed to justify on
 other grounds); API keys moved from `storage.session` to `storage.local`; edits,
 deletes, RTL, a11y, embeds specified; numeric criteria replaced "I'd notice."
+
+**v3 → v3.1 (inline fixes, no restructure).** Restored §3 Product shape, deleted
+by compression — the render-underneath decision, the modes and the badge had
+stopped appearing anywhere. Phase 4 now states that back-translation does not
+catch the errors §6 says it doesn't, and restores *append the original* as the
+real mitigation; noted as the honest cut since A isn't justified by writing.
+`downloadable` given its own terminal routing branch in §4.3 — collapsing four
+availability states to a boolean silently routed free-and-local pairs to DeepL.
+0b masks DNT with the real code instead of penalising every engine for an
+unmasked baseline. Paid rater fallback and an inverted cheap-first order added to
+§6. §2's question now routes its own answer back via `availability()` telemetry.
+NLLB and Opus-MT separated, NLLB taken, re-budgeted to one to two days. §11's
+speculative interface reduced to the two constraints it was carrying.
 
 **v2 → v3.**
 
