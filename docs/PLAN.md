@@ -1,97 +1,82 @@
 # Polyglot — a build plan for in-place chat translation
 
-**Problem.** Group chats on Discord, Telegram and elsewhere routinely mix three
-or four languages in one channel. Copy-pasting each message into a translator
-destroys the flow, loses thread context, and is hopeless in a fast channel. I
-want to read every message in my language without leaving the chat.
+**Problem.** Group chats on Discord and Telegram routinely mix three or four
+languages in one channel. Copy-pasting each message into a translator destroys
+the flow, loses context, and is hopeless in a fast channel. I want to read every
+message in my language without leaving the chat.
 
-**Revision note (v2).** This plan was substantially rewritten after review. The
-first version validated the wrong risk, contained a routing policy that
-contradicted its own cost story, had a cache key incompatible with its context
-feature, and scoped four platform adapters it could not maintain. §12 records
-what changed and why.
+**v3.** Revised twice under review. §14 records what changed. The short version:
+v1 validated the wrong risk and contradicted itself in three places; v2 fixed
+that but generalized client-side economics to a server, fused a personal tool
+with a public product, and set a quality gate I have no way to measure.
 
 ---
 
-## 1. What is actually uncertain
+## 1. Two products, decided separately
 
-Three risks, in the order they can kill the product:
+The single most useful cut in this revision. v1 and v2 both described one thing.
+There are two, with different requirements, different risks, and different
+reasons to exist:
+
+**A. A tool for me.** Discord web, English reading language, my machine,
+unlisted. Success is that I read my channels. No store review, no onboarding, no
+consent copy, no addressable market.
+
+**B. A public product.** Everything in A plus Web Store review, arbitrary
+reading languages, arbitrary hardware, other people's privacy, support.
+
+**v1 ships A.** B is a separate decision, gated on §2 and taken after A has run
+for a month. This is not a hedge — several things that look like risks in B cost
+nothing in A, and several costs in B are unjustifiable until A proves the
+product is worth using at all.
+
+Consequences, spelled out because they were tangled before:
+
+- **The `en ↔ N` pivot problem (§4.1) does not affect me.** My reading language
+  is English; every pair I need is `N → en`, which the API supports natively
+  with no pivot. The `"no provider for es→pt"` fallback state almost never
+  fires in A. It becomes launch-blocking the moment a Spanish-reading user
+  installs B. Carried forward as a **B-risk**, not a live v1 concern.
+- **Consent copy, onboarding and privacy policy move to B.** The context-export
+  bound in code (§5) stays in A — that's a real constraint on my own behaviour,
+  not paperwork.
+- **RTL (§4.7), honestly classified.** When source is Arabic and target is
+  English, my injected layer is LTR — RTL is mostly a B-concern (users whose
+  *reading* language is RTL). It bites A only where RTL fragments and restored
+  DNT spans land inside an English layer. `dir="auto"` plus bidi isolation is
+  cheap enough to keep in Phase 1 regardless, but v2 overstated its urgency.
+- **A11y likewise**: `lang` attributes are nearly free and genuinely useful in A
+  (font selection); the screen-reader double-read story is a B-concern.
+
+---
+
+## 2. The question that gates B, and has never been asked
+
+Chrome/Edge desktop only, plus the hardware gate in §4.1. **What share of people
+can actually run this?** Nobody has estimated it, through three drafts.
+
+This is the input to a 4–8 week decision (§9, Phase 5). If the answer is a low
+single-digit share of Chrome desktop users who *also* read multilingual group
+chats, the right move is to stay unlisted, hand the zip to a few people, and
+spend those weeks elsewhere.
+
+Note the interaction with §8: "spend the store weeks on the bot instead" is only
+attractive if the bot has economics, which is exactly what §8 now questions.
+**Taken together, §1 and §8 argue for a smaller v1 than either does alone** — the
+extension, unlisted, for me and a handful of friends, with both the store and the
+bot deferred behind evidence.
+
+---
+
+## 3. What is actually uncertain
 
 1. **Quality.** Are machine translations of casual group chat good enough that
-   reading them beats not reading them? If the Spanish comes back as mush, a
-   flawless mechanism is a failed product.
-2. **Economics.** Is there a free-or-cheap path for the common case? If every
-   message costs an LLM call, this is a cloud product with a cloud product's
-   cost and privacy problem, not a local utility.
+   reading them beats not reading them? Gated in Phase 0b (§6, §7).
+2. **Economics.** Is there a free-or-cheap path for the common case? Client-side
+   the answer looks yes (§4.1). Server-side, for the bot, it is **unanswered**
+   (§8).
 3. **Mechanism.** Can injected nodes stay attached and correct through a
-   virtualized, frequently-redesigned chat UI?
-
-Risk 3 is the most solved of the three — Discord exposes stable message ids,
-and there is a decade of prior art in userscripts and client mods. It is a day
-of work to confirm, not three. Risks 1 and 2 are the ones with no prior answer
-for *this* use case, so they are validated first (§6).
-
----
-
-## 2. Scope
-
-**v1 is Discord web only.** One adapter, the platform with the best selectors
-and the one I use daily.
-
-This is a deliberate cut from the four adapters in v1 of this plan. Each adapter
-carries a permanent maintenance cost against an unversioned, obfuscated,
-frequently-shipped web app, and that cost is paid forever from the moment it
-ships. Four adapters was the single biggest scope error in the previous draft.
-
-Telegram is served by a **bot** (§8), not an adapter — a bot is sanctioned by
-the Bot API, reaches every member on every device including mobile, carries no
-DOM maintenance tax, and has a better consent story (§5). Building two Telegram
-Web adapters for a platform better served another way was incoherent.
-
-| Surface | v1 | Notes |
-|---|---|---|
-| Discord web | **Yes** | Stable `id="chat-messages-<id>"` |
-| Telegram | Phase 3, **as a bot** | Not an adapter |
-| WhatsApp Web | No | Obfuscated DOM, highest ToS risk of any target |
-| Slack | No | Revisit only if the maintenance model proves out |
-| Discord/Telegram desktop apps | Never | Electron/native, out of reach |
-| Any mobile app | Never (via extension) | The bot route covers this |
-
-**Browser scope: Chrome/Edge desktop only in v1.** See §4.1 — the free
-translation path does not exist on Firefox, which makes Firefox a different
-product with a different funnel, not a build-target checkbox.
-
-**Non-goals:** voice/video, image OCR, auto-sending my messages without review.
-
----
-
-## 3. Product shape
-
-### 3.1 Inbound translation (the core)
-Translations render **underneath** the original, dimmer and slightly indented,
-with a language badge (`ES → EN`). The original is never replaced or hidden:
-mistranslation is inevitable, and keeping the source visible lets me catch it
-and lets bilingual readers ignore the layer.
-
-Modes: auto (everything not in my known-languages list), on-demand (hover
-button), and per-channel settings keyed by (platform, guild, channel).
-
-### 3.2 Outbound translation
-I type in English, press a hotkey, get a translation in the composer **for
-review before sending** — never auto-send. A back-translation ("this says: …")
-lets me sanity-check text I can't read.
-
-### 3.3 Context handling
-Generic MT fails on chat specifically. The intended wins:
-- **Thread context** — the previous 3–5 messages, so short replies resolve.
-- **Slang mode** — an LLM with a "casual group chat, preserve register" prompt.
-- **Do-not-translate spans** — @mentions, `#channels`, `:emoji:`, code blocks,
-  URLs, custom emoji. Masked before translation, restored after.
-
-**This section is a hypothesis, not a commitment.** Phase 0b (§6) tests whether
-thread context measurably improves output. If it doesn't, §3.3 shrinks to DNT
-masking, and the cache (§4.4) and privacy story (§5) both get simpler. The
-previous draft called context handling "the differentiator" without evidence.
+   virtualized, frequently-redesigned UI? Cheapest of the three; one day (§9).
 
 ---
 
@@ -100,376 +85,404 @@ previous draft called context handling "the differentiator" without evidence.
 ```
 ┌─ Content script (Discord adapter) ───────────────────────┐
 │  MutationObserver → queue → IntersectionObserver gate    │
-│  **Translator + LanguageDetector run HERE** (see 4.2)    │
-│  Shadow-DOM Preact layer, dir/lang set per node          │
+│  Translator + LanguageDetector run HERE (§4.2)           │
+│  Shadow-DOM Preact layer, dir/lang per node              │
 └───────────────┬──────────────────────────────────────────┘
-                │ port (only for cloud paths + settings)
+                │ port (cloud paths + settings only)
 ┌───────────────▼─── Service worker (MV3) ─────────────────┐
 │  Cloud providers · token bucket · backoff · quota        │
-│  IndexedDB cache (shared, two-tier keys)                 │
+│  IndexedDB cache (two-tier keys, §4.4)                   │
 └──────────┬──────────────────┬────────────────────────────┘
       DeepL/Google        LLM (manual escalation only)
 ```
 
-### 4.1 The on-device path — verified, and load-bearing
+### 4.1 The on-device path — verified
 
-Everything free in this plan flows through Chrome's built-in `Translator` and
-`LanguageDetector` APIs, so this was checked **first**. Findings as of
-**2026-09-17** — re-verify before relying on them, these move:
+Findings as of **2026-09-17**; re-verify, these move.
 
-- **Chrome 138+ (Jun 2025) and Edge 148+ (May 2026). Desktop only.** No mobile.
-  **Firefox and Safari: unsupported, with no equivalent web API.**
-- **Stated requirements: ~22 GB free disk on the profile volume, 16 GB+ RAM,
-  4+ CPU cores**, Windows 10/11 / macOS 13+ / Linux / ChromeOS. (These are the
-  shared built-in-AI requirements; whether Translator alone is gated this hard
-  in practice is worth measuring on a low-spec machine in Phase 0a, but the
-  documented gate is what determines the support matrix.) A meaningful share of
-  users will not meet 22 GB free.
-- `availability()` returns `available` / `downloadable` / `downloading` /
-  `unavailable`, per language pair.
-- **`create()` requires a user gesture when the pack isn't downloaded.** You
-  cannot silently warm the translator on page load. This needs real UX: a
-  first-run "enable translation for Spanish" button, per pair, and a visible
-  download state. The previous draft had no UX for this at all.
-- **Language pairs are `en ↔ N`: non-English pairs pivot through English.**
-  So ES→PT costs quality twice, on exactly the pairs a multilingual channel
-  produces. `chrome://on-device-translation-internals/` lists live pair status.
-- Cross-origin iframes require `allow="translator"`.
+- **Chrome 138+ and Edge 148+, desktop only.** **Firefox and Safari: no
+  equivalent web API** — which is why Firefox is out (no default provider there
+  at all, plus a second, event-page-shaped background form).
+- `availability()` → `available` / `downloadable` / `downloading` /
+  `unavailable`, per pair. **`create()` requires a user gesture** when a pack
+  isn't present — no silent warm-up; this needs a real per-pair download UX
+  (§9, Phase 1).
+- **Pairs are `en ↔ N`; non-English pairs pivot through English.** A B-risk, not
+  an A-risk (§1).
+- Cross-origin iframes need `allow="translator"`.
+- **Hardware gate, precisely.** Language packs are ~25–50 MB each and the
+  underlying models ~1.5–2 GB, but **Chrome still gates on ~22 GB free disk,
+  16 GB+ RAM, 4+ cores**. So the barrier is *policy, not physics* — the disk a
+  user needs free vastly exceeds what gets used, and Google could relax it.
+  v2 implied the packs themselves were heavy; they aren't. The gate is still
+  what determines who qualifies, so it remains the input to §2 — measure it on a
+  low-spec machine in Phase 0a rather than trusting the documented figure.
 
-**Consequence for Firefox:** there is no default provider. Every Firefox user
-would have to paste a DeepL key on install or the extension does nothing. Plus
-Firefox MV3 is event-page-shaped, not service-worker-shaped, needing a second
-background form. Firefox is therefore out of v1 — not a checkbox, a separate
-product decision.
+### 4.2 Where translation runs
+The built-in APIs are **not available in Web Workers** (Permissions Policy), so
+they cannot run in the MV3 service worker. Translation and detection run in the
+**content script**; the worker handles cloud calls, quota and cache. Phase 0a
+confirms behaviour in an extension service worker and an offscreen document.
 
-### 4.2 Where translation runs — corrected
-
-The built-in APIs are **not available in Web Workers** (Permissions Policy).
-The previous draft's diagram put translation in the MV3 service worker, which
-is a worker context. Translation and detection therefore run **in the content
-script**; the service worker handles only cloud calls, quota and cache.
-
-Phase 0a must confirm the exact behaviour in an extension service worker and in
-an offscreen document, since that determines whether an offscreen document is
-needed as a fallback host. Design defensively: content script first.
-
-### 4.3 Provider routing — the LLM is an escape hatch, not the default
-
-The previous draft claimed "on-device first, cloud is the escape hatch" while
-routing short/slangy/emoji-dense messages to an LLM — and §3.3's whole premise
-is that chat *is* short, slangy and emoji-dense. The modal message routed to the
-LLM. The escape hatch was the default, which broke the cost claim, the latency
-budget, and the cache. Resolved, explicitly:
+### 4.3 Provider routing
 
 ```
-detect → if known language                     → skip, no cost
-       → elif pair available on-device         → on-device
-       → elif quality tier enabled (BYO key)   → DeepL / Google
-       → else                                  → show "no provider for es→pt"
+detect → known language                    → skip, no cost
+       → pair available on-device          → on-device
+       → quality tier enabled (BYO key)    → DeepL / Google
+       → else                              → "no provider for es→pt" (rare in A)
 ```
 
-**The LLM is never on the automatic path.** It is a per-message user action —
-a "translate properly" button on the layer, used when the cheap path produced
-something I can tell is mangled. That keeps the automatic path free, private,
-fast and cacheable, and confines LLM cost, latency and context-export to
-messages I explicitly chose.
+**The LLM is never on the automatic path.** It is a per-message "translate
+properly" button on the layer, used when the cheap path produced something
+visibly mangled. That confines LLM cost, latency and context-export to messages
+I explicitly chose, and is what makes §5's bounding argument true.
 
-If Phase 0b shows the cheap path is *usually* mush, that's a product-level
-finding: it means this is a cloud product, and §4.3, §5 and §9 get rewritten
-together to say so honestly. It does not mean quietly defaulting to the LLM.
+### 4.4 Caching
+Two tiers, because the same text under different context has a different correct
+translation:
 
-### 4.4 Caching — fixed key, honest role
+- **Context-free** (automatic path): `sha256(text + src + tgt + provider)`.
+- **Context-assisted** (LLM escalations): `+ sha256(contextWindow)`. Effectively
+  unique; hits only on genuine repeats, which is fine for a user-initiated path.
 
-The previous key was `sha256(text + sourceLang + targetLang + provider)`, which
-is incompatible with §3.3's thread context: the same text under different
-context has a different correct translation, so the cache would serve "yes, that
-one" into a thread needing "yeah, him." Two tiers:
-
-- **Context-free translations** (the automatic path): keyed as above. Reusable
-  across conversations.
-- **Context-assisted translations** (LLM escalations): keyed with
-  `+ sha256(contextWindow)`. Effectively unique, so it hits only on genuine
-  repeats. That's fine — these are user-initiated and rare.
-
-They are never interchangeable, and the tier is part of the key, not a flag.
-
-**The cache is a latency win, not the cost defence.** The previous draft's
-examples — "gm", "thanks", stock phrases — are exactly the sub-15-character
-messages §4.5 says to skip, and scroll-back re-reads are already free via
-id-keyed re-injection. **Viewport gating (§4.6) is the cost defence.** IndexedDB,
-LRU, ~50MB, 30-day TTL.
+Never interchangeable; the tier is part of the key. **The cache is a latency
+win. Viewport gating (§4.6) is the cost defence** — the stock phrases that would
+drive a high hit rate are exactly the sub-15-character messages §4.5 skips.
 
 ### 4.5 Language detection
-Built-in `LanguageDetector`, with bundled CLD3/`franc` WASM as fallback.
+Built-in `LanguageDetector`, CLD3/`franc` WASM fallback. Below ~15 characters,
+trust nothing — skip unless a channel's dominant language can be inherited.
+Sticky per-author weighting.
 
-- **Below ~15 characters, trust nothing** — "ok", "lol", "😂" get skipped
-  unless the channel has a known dominant language to inherit.
-- Sticky per-author hint: weight by that author's recent messages.
-- **Code-switching within one message** ("vamos to the store mañana") is in the
-  §10 golden set, so the design must be able to express it: detection returns a
-  *ranked list with confidence*, and where the top two are close and the message
-  is long enough, segment by sentence and detect per segment. The previous draft
-  returned one language per message and would have tested for something the
-  design couldn't represent. If Phase 0b shows segmentation isn't worth it,
-  drop the golden-set cases too — don't leave the mismatch.
+**Code-switching: measured before it is built.** v2 committed to ranked-
+confidence detection plus per-sentence segmentation — real Phase 2 work — on the
+assumption that intra-message code-switching matters. The corpus is being
+collected in 0b anyway, so **count it there**. Under ~5% of messages: drop
+segmentation and the golden-set cases together. Over ~15%: build it, with
+evidence. In between: single-language detection plus a manual re-translate
+affordance. The answer is free and arrives before the work does.
 
-### 4.6 The render loop
-MutationObserver → queue → **IntersectionObserver releases only near-viewport
-messages** → debounce ~150ms → batch → inject → mark `data-polyglot-done`.
+### 4.6 Render loop and message lifecycle
+MutationObserver → queue → IntersectionObserver releases near-viewport only →
+debounce ~150ms → batch → inject → mark done. Scrolling past 500 backlog
+messages must not fire 500 translations.
 
-Scrolling past 500 backlog messages must not fire 500 translations. This is the
-main cost and performance lever.
+- **Edits:** key on `(messageId, hash(currentText))`, so an edit invalidates and
+  a virtualized remount of unchanged text hits cache and re-injects free. One
+  rule covers both, by construction.
+- **Deletions:** observer removes the orphaned layer.
+- **Quoted replies** masked as DNT, inheriting the quoted message's own layer.
+  **Embeds, link previews, poll options and thread titles are explicitly not
+  translated in v1** — decided here rather than discovered in Phase 1.
 
-**Message lifecycle — previously missing entirely:**
-- **Edits.** Discord edits constantly. The node must be keyed on
-  `(messageId, hash(currentText))`, not `messageId` alone, so an edit
-  invalidates the layer and re-translates. Note the previous design failed
-  *differently* per id strategy — stable ids showed a stale translation, the
-  `hash(author+text+timestamp)` fallback silently orphaned and re-translated.
-  One rule for both.
-- **Deletions.** Observer must remove the orphaned layer.
-- **Quoted replies, embeds, link previews, poll options, thread titles.** The
-  adapter's `extract()` returns the message body only; quoted content is masked
-  as DNT and inherits the quoted message's own layer if it has one. Embeds are
-  out of scope for v1 and explicitly not translated — decided here rather than
-  discovered in Phase 1.
-
-### 4.7 Rendering correctness — previously missing
-- **RTL.** Arabic, Hebrew and Persian are among the likeliest sources. Every
-  injected node sets `dir="auto"` and wraps in bidi isolation (`unicode-bidi:
-  isolate`), or mixed text renders scrambled inside Discord's LTR layout. Cheap
-  in Phase 1, expensive to retrofit.
-- **`lang` attribute** set on every injected node — drives font selection, TTS
-  and screen-reader pronunciation.
-- **Accessibility.** Screen readers will otherwise read every message twice.
-  The layer gets an `aria-label` naming it a translation, and an option to mark
-  the *original* `aria-hidden` when auto-translation is on.
+### 4.7 Rendering correctness
+`dir="auto"` plus `unicode-bidi: isolate` on every injected node; `lang` set
+correctly; `aria-label` marking the layer as a translation. See §1 for which of
+these are A-concerns and which are B-concerns.
 
 ---
 
-## 5. Privacy — naming the right party
+## 5. Privacy
 
-The sharp version, which the previous draft raised and then answered at the
-wrong person: **group chats contain other people's words.** Every remedy in that
-draft — consent screen, per-platform opt-in, an indicator — governs *my*
-consent. The third parties whose messages get shipped to DeepL or Anthropic
-consent to nothing, and me clicking "I agree" does not obtain it for them.
-
-Stated plainly: **using a cloud provider sends other people's messages to a
-third party.** Under GDPR that arguably makes the user a controller exporting
-others' personal data, and it is the question a Chrome Web Store reviewer asks.
-This is not a blocker — IMEs, screen readers and browser translate features all
-sit in the same position — but it is a residual risk the *user* carries, and the
-product should say so rather than imply consent was obtained.
+**Group chats contain other people's words.** Every remedy that governs *my*
+consent — a consent screen, an opt-in, an indicator — answers the wrong party.
+The third parties whose messages get shipped to DeepL or Anthropic consent to
+nothing, and me clicking "I agree" does not obtain it for them. Under GDPR that
+arguably makes me a controller exporting others' personal data. Not a blocker —
+IMEs, screen readers and browser translate sit in the same position — but a
+residual risk **I** carry, stated rather than dissolved.
 
 Minimisation, which is what's actually on offer:
-- On-device by default; **no message content leaves the machine on the automatic
-  path.** This is the single strongest mitigation and the main argument for
-  keeping the LLM off that path (§4.3).
-- Cloud strictly opt-in, per-provider, one-time explicit consent naming the
-  provider and stating the above in plain language.
-- DMs excluded by default, separately enabled.
-- No message content in logs or telemetry, ever. Counters only.
-- Visible indicator whenever a cloud provider is in use.
+- On-device by default: **no message content leaves the machine on the automatic
+  path.** The strongest mitigation, and the main reason to keep the LLM off that
+  path (§4.3).
+- Cloud opt-in per provider; DMs excluded by default; no content in logs or
+  telemetry, ever; visible indicator when a cloud provider is live.
 
-**Bounded context export.** §3.3's thread context means translating one message
-also sends the previous 3–5. The consent UI implies per-message or per-channel
-choice; the implementation exports a rolling window. This must be stated in the
-consent copy, hard-bounded in code (N messages, no media, no author ids), and
-is a further reason the LLM path is user-initiated.
+### 5.1 The context rule — decided now, before the tempting result arrives
 
-**The benchmark has the same problem.** Phase 0b runs 200 real messages from
-private group chats through three engines — that is itself the first instance of
-exporting other people's messages. Use a channel I'd be comfortable exporting,
-strip authors, and don't treat the corpus as exempt because it's "just a test."
+§3 makes thread context a hypothesis that 0b will test. If 0b says context
+helps, the obvious next move is to switch it on for the automatic cloud path,
+and **DeepL's API has a `context` parameter for exactly this — context is not
+translated and, verified, is not billed.** So the usual brake does not exist:
+using context on the automatic path is *free*. Only a rule stops it.
 
-**The bot has a better story.** A Telegram bot is added to a group by an admin,
-visibly, with the group's knowledge — consent at the group level by someone
-entitled to give it. That's a genuine advantage over the extension, not just a
-reach advantage.
+**The rule: context is permitted only on user-initiated paths.** Never on the
+automatic path, whatever 0b returns. If that is ever revisited, §5 must be
+rewritten in the same commit, because the moment context rides the automatic
+path, surrounding messages leave the machine for every cloud-translated message
+and the bounding argument is gone — silently, without anyone deciding to remove
+it.
+
+In code: N messages, no media, no author ids, hard-bounded.
+
+### 5.2 The benchmark is the first export
+0b runs real messages from private group chats through several engines. That is
+itself an instance of the problem. Use a channel I'd be comfortable exporting,
+strip authors, and don't treat the corpus as exempt for being "just a test."
 
 ---
 
-## 6. Phases
+## 6. Phase 0b — the gate, and how it is actually measured
 
-Reordered so the cheapest, most decisive checks come first.
+Everything depends on this phase, and v2 specified a rubric I cannot apply:
+"meaning preserved, register preserved" — **in languages I can't read.** That is
+the premise of the whole product. A gate I can't measure honestly returns
+whatever number I was hoping for.
+
+**Method, in priority order:**
+
+1. **Bilingual raters — primary.** One friend per language, for the two
+   languages that dominate my channels. This is the only method that credibly
+   rates *register*, which for casual chat matters as much as meaning. One
+   afternoon each, and the cheapest honest option by a wide margin.
+2. **LLM-as-judge on (original, translation) — supporting, for the on-device and
+   DeepL tiers only.** Defensible there because the judge is a different system.
+   **Explicitly not used to rate the LLM tier** — that's circular.
+3. **End-to-end comprehension — complementary.** Read a translated channel for
+   an hour, write down what I understood happened, have a bilingual rater mark
+   it. This tests the actual product claim ("reading them beats not reading
+   them") rather than sentence-level quality, and I can run it myself.
+4. **Back-translation — explicitly rejected as a primary measure.** It hides
+   precisely the failure that matters: a fluent-but-wrong translation
+   back-translates fluently.
+
+**Sizing, honestly.** v2's "200 messages × 3 engines × 3 criteria, one
+afternoon" is ~1,800 judgments. Done in an afternoon, the number is noise. Cut
+to **~80–100 messages per language, two languages**, rated carefully.
+
+**The gate is coarse, because the measurement is.** At n≈100 the confidence
+interval on a proportion near 0.8 is roughly ±8 points, so v2's "≥80%" versus
+75% is not a distinguishable difference and must not carry a 10-week decision.
+Instead:
+
+- **Obviously good** → build.
+- **Obviously bad** → stop.
+- **Marginal** → *stop.* Marginal quality will not survive real use, and
+  "marginal" is the result most likely to be argued into a green light.
+
+Also counted in this phase, free: **code-switching frequency** (§4.5) and
+**self-hosted MT quality** (§8).
+
+---
+
+## 7. Terms of service
+
+Reading the DOM and overlaying in my own browser is ordinary extension
+behaviour. Automating the account is not — Discord bans self-bots, and
+API-driven automation of a user account breaks Telegram's and WhatsApp's terms.
+Render-only; nothing sent without an explicit click. WhatsApp is out of scope
+partly for this reason.
+
+---
+
+## 8. The Telegram bot — economics, which it did not have
+
+v2 moved the bot from "future work" into Phase 3 on reach, ToS and consent. All
+three arguments hold. But **every economic and privacy argument in this document
+is client-side, and none of them survive the move to a server.** v2 quietly
+generalized them. Stated properly:
+
+- **There is no on-device branch.** No built-in Translator API on a VPS. The
+  free default — the thing §4.1 was checked first to establish — does not exist
+  for the bot. Every translation is a paid call, or a model I host.
+- **There is no viewport.** The cost defence (§4.4) is gating on what someone
+  actually looks at. A bot sees no one looking, so eager translation means
+  translating every message whether or not anyone reads it.
+- **Fan-out multiplies.** A 40-person group with five reading languages needs
+  each message translated once per *distinct target*, not per member — but
+  that's still up to 4× every message, against 1× for what one extension user
+  scrolls past.
+- **BYO keys does not transfer.** The extension's cleanest structural decision —
+  no backend, no key custody, no per-user cost exposure — works because each
+  user pays for their own reading. When an admin adds a bot, whose key pays for
+  500 messages/day × 40 members? "The admin's" is a hard sell; "mine" is a
+  business.
+- **It is infrastructure.** Hosting, deploys, secrets, a database of per-user
+  preferences, uptime. "No store review to ship a fix" is real, and is traded
+  for "something I now operate."
+- **And it inverts the privacy story I credited it with.** v2 said the bot has
+  a better consent story — true, an admin adds it visibly on the group's behalf.
+  But group members' messages now flow through **my server**, making me a
+  processor holding other people's chat content. Better consent, worse custody.
+  Both, not just the flattering half.
+
+**The two answers, and how they get decided early:**
+
+1. **Demand gating instead of viewport gating.** The bot translates on request —
+   a reply command or a reaction — not eagerly. This is the direct analogue of
+   §4.6 and it is what makes the cost bounded by *interest* rather than by
+   traffic. Eager translation is the unaffordable mode; treat it as opt-in per
+   group, off by default.
+2. **Self-hosted MT** (NLLB-200 distilled, Opus-MT via CTranslate2) on a small
+   box, restoring free-at-the-margin — pay for the box, not per character. It
+   also keeps content off third-party APIs, though not off my server.
+
+**Decided in Phase 0b, eight weeks early, for the cost of one afternoon:** add
+self-hosted NLLB/Opus-MT as a fourth engine in the bake-off. If it clears the
+same bar as the on-device path, the bot is viable and roughly free at the
+margin. If it doesn't, the bot is a paid cloud product, and building it as a
+personal tool needs a decision it has never been given.
+
+**Re-budgeted: 3–4 weeks, not 2** — self-hosted inference, hosting, a
+preferences database and deploys are not two weeks — **and gated on 0b.**
+
+---
+
+## 9. Phases
 
 ### Phase 0a — Capability check (half a day)
-Mostly done; see §4.1. Remaining: measure real behaviour on a low-spec machine,
-confirm Translator availability in an extension service worker vs content script
-vs offscreen document (§4.2), and pull the live pair list from
-`chrome://on-device-translation-internals/` for my actual languages.
-**Exit:** I know whether the free path covers my channels, and where it runs.
+Mostly done (§4.1). Remaining: real behaviour on a low-spec machine (§2 depends
+on it); Translator availability in extension service worker vs content script vs
+offscreen document (§4.2); live pair list from
+`chrome://on-device-translation-internals/`.
 
-### Phase 0b — Quality bake-off (one afternoon) ← *the real gate*
-Collect ~200 real messages from my group chats, with their preceding context.
-Run each through: built-in Translator, DeepL, and an LLM with thread context.
-Rate on a rubric — meaning preserved, register preserved, DNT spans intact.
-**Exit criterion: ≥80% of the cheap path rated meaning-preserved.** Below that,
-the automatic path doesn't carry the product and §4.3 needs rewriting before
-anything is built. Also settles whether thread context earns its cost (§3.3).
-
-Nothing else starts until this passes. The previous draft had no phase gated on
-output quality anywhere.
+### Phase 0b — Quality bake-off (2–3 days) ← *the gate*
+Per §6: ~80–100 messages × 2 languages, four engines (built-in, DeepL, LLM with
+context, self-hosted MT), bilingual raters. Also counts code-switching frequency
+(§4.5). v2 said "one afternoon"; with real raters and an honest corpus it is not.
+**Nothing else starts until this passes.**
 
 ### Phase 0c — DOM spike (one day)
-Discord only. Can injected nodes stay attached and correct through virtualized
-scrolling, edits and deletes? Throwaway code.
-**Exit:** layers survive 5 minutes of scrolling plus an edit and a delete.
+Discord only, throwaway. Do layers survive virtualized scrolling, an edit and a
+delete? Confirms the `(messageId, hash(text))` key.
 
-### Phase 1 — Walking skeleton (1.5 weeks)
-Extension scaffold; Discord adapter; on-device path with the pack-download UX
-(§4.1); two-tier cache; RTL/`lang`/a11y from the start (§4.7); edit and delete
-handling; options page.
-**Exit:** I read a Spanish channel in English, locally, free.
+### Phase 1 — Walking skeleton (2.5–3 weeks)
+Scaffold; Discord adapter; on-device path; **per-pair pack-download UX** — a
+state machine over four availability states, gated behind a user gesture, with
+progress, failure and retry; two-tier cache; edit/delete handling; `dir`/`lang`;
+options page.
+
+*v2 called this 1.5 weeks — v1's one-week estimate nudged, while four
+workstreams were added to it. The download UX alone is most of a week.*
 
 ### Phase 2 — Make it good (2 weeks)
-Detection with short-message and code-switching rules; DNT masking; viewport
-gating and batching; per-channel settings; hover translate; LLM escalation
-button; error and adapter-broken states (§7).
-**Exit:** usable all day on a busy server without annoyance.
+Detection rules; DNT masking; viewport gating and batching; per-channel
+settings; hover translate **on every message including skipped ones** (§12);
+LLM escalation button; context bound in code (§5.1); adapter-broken state (§10).
 
-### Phase 3 — Telegram bot (2 weeks)
-Bot API, per-user language preferences, translations as replies or ephemeral
-messages. Shares the provider/cache package (§11).
-**Exit:** my Telegram groups are covered, on every device, within ToS.
+### Phase 3 — Telegram bot (3–4 weeks, **gated on §8**)
+Only if 0b showed self-hosted MT clears the bar, or I accept a paid cloud
+product. Demand-gated by default.
 
-### Phase 4 — Outbound + polish (2 weeks)
-Composer translation with back-translation; glossary of never-translate terms;
-quota meter; consent flows.
-**Exit:** I can participate, not just read.
+### Phase 4 — Outbound (2 weeks)
+Composer translation with back-translation review; glossary; quota meter.
 
-### Phase 5 — Public release (4–8 weeks, mostly waiting)
-Chrome Web Store submission, privacy policy, onboarding, landing page.
+### Phase 5 — Public release (**decision, then 4–8 weeks**)
+Not automatic. Gated on §2: estimate the qualifying share of users first. If
+small, stay unlisted and stop here. If it proceeds: consent flows, privacy
+policy, onboarding, a11y completion, store submission — multi-round review for
+an extension with host permissions on a major chat origin and user API keys, and
+a rejection resets the clock. Calendar time, not work time.
 
-Budgeted separately and honestly: store review for an extension requesting host
-permissions on a major chat origin **and** handling user API keys is a
-multi-round process, and a rejection resets the clock. This is calendar time,
-not work time.
-
-### Timeline
-- **Working for me: ~8–10 weeks.** (Previous draft: 6–9 weeks for four
-  adapters, four providers, two stores and everything in §10 — off by roughly
-  3x. One adapter plus one bot makes the number close to honest.)
-- **Publicly shipped: +4–8 weeks**, mostly review latency.
-- **Standing cost: ~10% of every week, forever, from Phase 1 onward**, for
-  adapter repair. The previous draft named this "the ongoing tax of the whole
-  product" and then allocated zero time to it in any phase.
+### Timeline, re-derived from scope rather than nudged
+- **Tool for me (0a–0c, 1, 2, 4): ~7–8 weeks.**
+- **Plus the bot, if 0b clears it: +3–4 weeks.**
+- **Plus public release, if §2 justifies it: +4–8 weeks**, mostly waiting.
+- **Standing: ~10% of every week, forever, from Phase 1** — adapter repair.
 
 ---
 
-## 7. Adapter breakage — detection *and* recovery
+## 10. Adapter breakage
+Fixture tests on saved HTML (including edited, deleted, quoted, RTL messages),
+plus a weekly canary that opens an issue on failure.
 
-Fixture tests on saved HTML, plus a weekly canary that loads Discord, runs the
-adapter self-check and opens an issue on failure.
-
-Two things the previous draft missed:
-
-- **Users must see it.** Breakage reported only to a counter means users get an
-  extension that silently does nothing. Needs an in-product state: "Polyglot
-  can't read this page — Discord may have changed. Check for an update."
-- **The fix is slow, and that's the real tax.** The natural fast fix —
-  remotely updatable selectors — collides with Chrome Web Store's
-  remotely-hosted-code policy. Selectors-as-config is arguably data, not code,
-  but it is a grey area and reviewers are strict; assume every adapter break is
-  a full store review cycle. This is the strongest argument for few adapters,
-  and it is why §2 cut three of them.
+- **Users must see it** — a counter alone means an extension that silently does
+  nothing: "Polyglot can't read this page — Discord may have changed."
+- **The fix is slow.** Remotely updatable selectors collide with Chrome Web
+  Store's remotely-hosted-code policy; selectors-as-config is arguably data, not
+  code, but reviewers are strict, so assume every break is a review cycle. This
+  is the strongest argument for few adapters — and note it is a **B-cost**: in A,
+  unlisted, I just reload the extension.
 
 ---
 
-## 8. Telegram bot (Phase 3, not "future work")
+## 11. Stack and the shared package
 
-The Bot API is first-class: a bot in a group posts translations as replies,
-reaching every member on every device, fully sanctioned. No DOM to maintain, no
-store review to ship a fix, and the consent story in §5.
+TypeScript strict; WXT for MV3; Preact in Shadow DOM; Vitest + Playwright; Zod.
+`chrome.storage.sync` for settings, IndexedDB for cache, **`chrome.storage.local`
+for API keys** — `session` is cleared on browser restart, `sync` must never carry
+keys.
 
-Discord has the same shape via a bot app with per-user language preferences and
-ephemeral responses — fully within ToS, unlike client modification. Worth doing
-after Telegram proves the pattern.
+The provider/routing/cache package is shared by the extension and the bot — but
+v2 asserted that on day one without noticing that **its primary branch doesn't
+exist in one consumer and its cost assumptions hold in only one** (§8). So the
+package takes both as **injected policy**, not built-in behaviour:
 
----
+```ts
+createTranslationCore({
+  providers: Provider[],        // may or may not include on-device
+  gate: GatingPolicy,           // viewport (extension) | demand (bot)
+  cache: CacheAdapter,          // IndexedDB | server-side store
+})
+```
 
-## 9. Terms of service
-
-Reading the DOM and adding an overlay in my own browser is ordinary extension
-behaviour. Automating the account is not: Discord bans self-bots outright, and
-API-driven automation of a user account breaks Telegram's and WhatsApp's terms
-too. This plan stays render-only — no message sent without an explicit click.
-WhatsApp is out of scope partly for this reason.
-
----
-
-## 10. Testing
-
-- **Adapter fixture tests** — saved HTML snapshots replayed in Playwright,
-  including edited, deleted, quoted and RTL messages.
-- **Weekly canary** (§7).
-- **Golden set** — the ~200 messages from Phase 0b become the standing quality
-  regression, re-rated whenever a provider or prompt changes. Cases must match
-  what the design can express (§4.5).
-- **Performance budget in CI** — fail on injection-cost regression.
+No `if (onDevice)` inside the package, and no assumption that something upstream
+has already decided a message is worth translating.
 
 ---
 
-## 11. Stack
+## 12. Success criteria
 
-TypeScript strict; WXT for MV3; Preact in Shadow DOM; Vitest + Playwright; Zod
-for settings and provider responses.
-
-Storage: `chrome.storage.sync` for settings, IndexedDB for cache, and
-**`chrome.storage.local` for API keys** — the previous draft said
-`storage.session`, which is cleared when the browser session ends and would make
-the user re-paste their DeepL key on every restart. `local` also never leaves
-the device; `sync` is correctly ruled out because keys must not sync.
-
-The provider/routing/cache layer is a **standalone package from day one**, since
-the extension and the bot both consume it.
-
----
-
-## 12. Success criteria — falsifiable
-
-The previous draft's criteria were "I'd notice / I wouldn't notice." Numbers:
-
-- **≥80%** of the golden set rated meaning-preserved on the automatic path;
-  **≥90%** including LLM escalation.
-- **100%** of golden-set DNT spans (mentions, emoji, code, URLs) intact.
-- **0** translation layers rendered on messages already in a known language.
+- Phase 0b clears the **coarse** bar in §6 — obviously good, not marginal.
+- **False negatives, which are the failure I'd actually feel:** in auto mode a
+  skipped Spanish "ya voy" is visually identical to an English message — I never
+  learn it happened, it just reads as a gap. So: **≤5% of foreign-language
+  golden-set messages left untranslated**, and the hover globe is available on
+  **every** message in **all** modes, not only on-demand mode. That affordance is
+  what makes the sub-15-character skip rule safe. (v2 measured only the inverse —
+  layers where none belonged — which is the failure I'd notice anyway.)
+- **100%** of golden-set DNT spans intact.
 - Adapter canary green **≥28 of 30 days**.
-- p95 injection cost within CI budget; translation visible **<500ms p50 /
-  <2s p95** on the on-device path (the automatic path only — this budget was
-  previously claimed for an LLM path where it was unachievable).
+- Translation visible **<500ms p50 / <2s p95 on the on-device path only**.
 - **$0** for a full day of on-device-only use.
-- Cloud provider character count **0** while cloud is disabled — asserted in a
-  test, not assumed.
+- **Cloud character count 0 while cloud is disabled** — asserted in a test.
+- **Context window size 0 on every automatic-path request** — asserted in a
+  test, because §5.1 is a rule and rules need enforcement.
 
 ---
 
-## 13. What changed from v1, and why
+## 13. First actions
 
-| v1 | v2 |
+1. Finish 0a: low-spec behaviour, worker-context confirmation, live pair list.
+2. Line up **two bilingual raters** (§6). This is the long-lead item — everything
+   waits on it, and it is the thing v2 assumed away.
+3. Collect the corpus **with context**, authors stripped, from a channel I'm
+   comfortable exporting (§5.2).
+4. Stand up self-hosted NLLB/Opus-MT as the fourth bake-off engine (§8).
+5. Run the bake-off. **Marginal means stop.**
+
+---
+
+## 14. Revision history
+
+**v1 → v2.** Phase 0 re-gated on translation quality rather than DOM attachment;
+scope cut from four adapters to Discord-only with Telegram moved to a bot;
+Firefox dropped (no built-in API); LLM demoted from automatic route to manual
+escalation, resolving a contradiction where the "escape hatch" was the modal
+path and broke the cost, latency and cache claims at once; cache split into two
+tiers so thread context couldn't poison context-free hits; translation moved out
+of the service worker (built-in APIs are unavailable in worker contexts —
+found by checking the API first, which the reordering was supposed to justify on
+other grounds); API keys moved from `storage.session` to `storage.local`; edits,
+deletes, RTL, a11y, embeds specified; numeric criteria replaced "I'd notice."
+
+**v2 → v3.**
+
+| v2 | v3 |
 |---|---|
-| Phase 0 spiked DOM attachment | Phase 0b gates on **translation quality**; DOM spike demoted to 0c, one day |
-| Four adapters (Discord, Telegram ×2, WhatsApp, Slack) | **Discord only**; Telegram becomes a bot in Phase 3 |
-| LLM auto-routed for short/slangy messages | **LLM is a manual escalation**; automatic path stays on-device/cloud-MT |
-| Cache key ignored thread context | **Two-tier key**, context hashed into the LLM tier |
-| Cache framed as the cost defence | **Viewport gating** is the cost defence; cache is latency |
-| Translator API checked at step 3 of §10 | **Checked first** (§4.1), with findings that changed the architecture |
-| Translation in the MV3 service worker | **In the content script** — built-in APIs aren't available in workers |
-| Firefox shipped in Phase 5 | **Out of v1** — no built-in API means no default provider there |
-| Privacy answered with user consent | Names the **third parties** who never consented; bounds context export |
-| `chrome.storage.session` for keys | **`chrome.storage.local`** |
-| Edits, deletes, RTL, a11y, embeds unmentioned | **Specified** (§4.6, §4.7) |
-| Breakage reported to a counter | Plus **user-facing state**, and the store-review cost named |
-| 6–9 weeks | **8–10 weeks to working**, +4–8 to shipped, +10%/week forever |
-| "I'd notice / I wouldn't" | **Numeric thresholds** (§12) |
-
----
-
-## 14. First actions
-
-1. Finish Phase 0a: low-spec behaviour, worker-context confirmation, live pair
-   list for my languages.
-2. Collect the 200-message corpus **with context**, from a channel I'm
-   comfortable exporting, authors stripped (§5).
-3. Run the bake-off. **If it fails, stop and rethink §4.3 before building.**
+| One product | **Two** (§1): a tool for me, and a public product decided later |
+| Store release assumed | **Gated on who can actually run it** (§2) — never asked before |
+| Bot justified on reach/ToS/consent | **§8: no on-device branch, no viewport, fan-out, no key model, it's infrastructure** — and I become a processor of others' messages |
+| Bot = 2 weeks, unconditional | **3–4 weeks, gated on 0b**, with self-hosted MT as a 4th bake-off engine to decide it 8 weeks early |
+| Shared package asserted | **Policy injected** (§11) — the package can't assume on-device or a viewport |
+| Rubric I can't apply | **Named raters** (§6): bilingual primary, LLM-judge non-circular only, back-translation rejected |
+| "≥80%, one afternoon" | **Coarse gate, 2–3 days** — ±8pp at n≈100 can't carry a 10-week call; **marginal = stop** |
+| Context = open question | **Rule now** (§5.1): user-initiated paths only. DeepL's `context` is free and unbilled, so only a rule stops it |
+| Code-switching design committed | **Counted in 0b first** (§4.5) — the measurement was already scheduled |
+| Pivot as live risk | **B-risk**: every pair I need is `N → en`, no pivot |
+| Packs implied heavy | **~25–50 MB packs, 1.5–2 GB models, 22 GB gate** — policy, not physics (§4.1) |
+| Measured false positives | **False negatives too** (§12), plus the affordance that makes skipping safe |
+| Phase 1 = 1.5 weeks | **2.5–3 weeks** — v1's number had been nudged, not re-derived |
+| "Slang mode" (auto route) | Deleted — it contradicted the §4.3 decision it survived |
