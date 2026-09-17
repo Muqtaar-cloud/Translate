@@ -1,0 +1,31 @@
+import type { Availability } from "@polyglot/core";
+
+/**
+ * Content script <-> service worker protocol.
+ *
+ * Note what is NOT here: translation requests for the on-device path. Chrome's
+ * built-in Translator is unavailable in Web Worker contexts, and an MV3 service
+ * worker is one, so on-device translation happens in the content script and
+ * never crosses this boundary. The worker handles settings, cloud calls and
+ * counters.
+ */
+
+export type ToBackground =
+  | { type: "get-settings" }
+  | { type: "cloud-translate"; provider: string; source: string; target: string; text: string }
+  /**
+   * PLAN.md §2: what share of machines can actually run the on-device path?
+   * Not externally knowable, but the extension has to call `availability()` to
+   * function — so log the distribution and the question stops being rhetorical
+   * by the time the public-release decision comes up.
+   *
+   * Counters only. No message content, ever.
+   */
+  | { type: "report-availability"; pair: string; state: Availability }
+  | { type: "report-adapter-health"; adapter: string; ok: boolean; detail: string };
+
+export type FromBackground =
+  | { type: "settings"; settings: import("./settings.js").Settings }
+  | { type: "translation"; text: string }
+  | { type: "error"; message: string }
+  | { type: "ok" };

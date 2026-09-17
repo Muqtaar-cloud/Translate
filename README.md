@@ -18,14 +18,19 @@ translation-quality bake-off, and the harness for it is built:
 - **`tools/bakeoff`** — the Phase 0b gate: capability probe, four engines,
   blinded rating sheets, Wilson intervals and a coarse verdict.
   ([how to run it](tools/bakeoff/README.md))
+- **`apps/extension`** — Phase 1: the Discord adapter, render loop, translation
+  layer and per-pair language-pack UX. ([how to run it](apps/extension/README.md))
 
-The extension is deliberately **not** built yet. The plan says nothing starts
-until the gate passes, and that applies to the person who wrote it.
+The quality gate still hasn't run — it needs real chat data and bilingual
+raters. Phase 1 was built ahead of it by explicit decision; if the gate comes
+back bad, this code is a sunk cost and the plan says so.
 
 ```bash
 npm install
-npm test        # 63 tests
+npm test          # 98 tests
 npm run typecheck
+npm run build:ext # -> apps/extension/dist, load unpacked in Chrome
+npm run smoke     # loads it into real Chromium against a fake Discord page
 ```
 
 ## What still needs a human

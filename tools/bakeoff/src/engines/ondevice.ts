@@ -34,11 +34,23 @@ export class OnDeviceEngine implements Engine {
 
   async open(): Promise<Page> {
     if (this.page) return this.page;
-    this.browser = await chromium.launch();
+    // The built-in AI APIs are not in the headless shell Playwright downloads
+    // by default; point at a full Chromium build (or a real profile) instead.
+    const executablePath = process.env["CHROMIUM_PATH"];
+    this.browser = await chromium.launch(
+      executablePath
+        ? { executablePath, headless: false, args: ["--headless=new", "--no-sandbox"] }
+        : {},
+    );
     const context = await this.browser.newContext();
     this.page = await context.newPage();
-    // about:blank has no origin; the API needs a real one.
-    await this.page.goto("https://example.com");
+    // about:blank has no origin and the API needs one, but reaching the real
+    // network would make the probe depend on egress. Serve a stub at a real
+    // https origin instead.
+    await this.page.route("https://polyglot.invalid/**", (r) =>
+      r.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>probe</title>" }),
+    );
+    await this.page.goto("https://polyglot.invalid/");
     return this.page;
   }
 

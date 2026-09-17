@@ -154,6 +154,25 @@ Findings as of **2026-09-17**; re-verify, these move.
   what determines who qualifies, so it remains the input to §2 — measure it on a
   low-spec machine in Phase 0a rather than trusting the documented figure.
 
+**Measured 2026-09-17**, Playwright's bundled Chromium 1194 (headless=new, not
+a real Chrome profile — treat as indicative, not as the 0a result):
+
+- **Both `Translator` and `LanguageDetector` were present** on a sandbox machine
+  nowhere near 22 GB free or 16 GB RAM. So the documented hardware gate does not
+  gate *API presence*; it presumably gates the pack download, which a headless
+  run cannot reach (no user gesture). The §2 question is therefore about who can
+  complete a download, not who has the API — a narrower and more answerable
+  question than the one the plan has been asking.
+- **Every pair returned `downloadable`, including `es→pt`.** Non-English pairs
+  are *offered* rather than rejected, so the `"no provider for es→pt"` state
+  fires more rarely than §4.3 implies, even for a non-English reader. The pivot
+  still happens underneath, so the quality concern stands and stays a B-risk —
+  but the availability concern was overstated.
+- **Nothing was `available` on a fresh profile.** The first foreign message in
+  any channel hits the download prompt. The Phase 1 download UX is therefore
+  not an edge case, it is the first-run experience for every user, and it
+  should be designed as onboarding rather than as an error state.
+
 ### 4.2 Where translation runs
 The built-in APIs are **not available in Web Workers** (Permissions Policy), so
 they cannot run in the MV3 service worker. Translation and detection run in the
