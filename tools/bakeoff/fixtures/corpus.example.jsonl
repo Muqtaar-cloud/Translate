@@ -1,0 +1,7 @@
+// Example only — shape reference, not real data. Real corpora live in
+// tools/bakeoff/data/ which is gitignored (PLAN.md §5.2: it is other people's
+// messages, collected from a channel you are comfortable exporting, authors
+// stripped, and not exempt from §5 for being "just a test").
+{"id":"m1","source":"es","text":"ya voy","context":["¿dónde estás?","llegamos en 5"]}
+{"id":"m2","source":"es","text":"jajaja <@123> otra vez con lo mismo :facepalm:","context":["mira esto https://x.com/a"]}
+{"id":"m3","source":"pt","text":"bora marcar pra sexta então?","context":["quem tá livre essa semana?"]}

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Polyglot settings</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; max-width: 540px; margin: 32px auto; padding: 0 16px; }
+      h1 { font-size: 20px; margin-bottom: 4px; }
+      .sub { opacity: 0.7; margin-top: 0; }
+      fieldset { border: 1px solid #ccc; border-radius: 6px; margin: 16px 0; padding: 12px 16px; }
+      legend { font-weight: 600; padding: 0 6px; }
+      label { display: block; margin: 8px 0; }
+      input[type="text"], input[type="password"], input[type="number"], textarea {
+        width: 100%; padding: 6px; box-sizing: border-box; font: inherit;
+      }
+      .warn { background: #fff6e5; border-left: 3px solid #f0b232; padding: 10px 12px; border-radius: 4px; }
+      .counters { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; opacity: 0.8; }
+      button { font: inherit; padding: 6px 14px; }
+    </style>
+  </head>
+  <body>
+    <h1>Polyglot</h1>
+    <p class="sub">Translations render under the original message. The original is never replaced.</p>
+
+    <fieldset>
+      <legend>Languages</legend>
+      <label>I already read these (comma separated)
+        <input type="text" id="known" placeholder="en, fr" />
+      </label>
+      <label>Translate into
+        <input type="text" id="target" placeholder="en" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Cloud translation</legend>
+      <p class="warn">
+        On-device translation keeps every message on this machine. Turning on a
+        cloud provider sends messages — <strong>including other people's</strong> —
+        to that provider. They have not agreed to that, and you cannot agree on
+        their behalf. Off by default for that reason.
+      </p>
+      <label><input type="checkbox" id="cloud" /> Use a cloud provider when a pair isn't available on-device</label>
+      <label><input type="checkbox" id="cloudDms" /> Also in direct messages</label>
+      <label>DeepL API key (stored on this device only, never synced)
+        <input type="password" id="deeplKey" placeholder="xxxxxxxx-xxxx-…:fx" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sending messages</legend>
+      <p class="sub">
+        Ctrl/Cmd + Shift + T translates what you've typed and shows it for review.
+        It is put in the message box, never sent — you press Enter yourself.
+      </p>
+      <label><input type="checkbox" id="appendOriginal" /> Append the original under the translation</label>
+      <p class="sub">
+        Recommended. A back-translation check can't catch a wrong translation that
+        reads well, but anyone bilingual in the channel sees both lines and can
+        correct it.
+      </p>
+      <label>Never translate these words (one per line)
+        <textarea id="glossary" rows="3" placeholder="Polyglot&#10;standup"></textarea>
+      </label>
+      <label>Daily paid-character budget (on-device translation is free and unmetered)
+        <input type="number" id="dailyCharLimit" min="0" step="1000" />
+      </label>
+      <div class="counters" id="quota">—</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>On-device availability</legend>
+      <p class="sub">
+        Counts only, no message content. These answer whether a public release
+        is worth it: how many real machines can actually run the free path.
+      </p>
+      <div class="counters" id="counters">none yet</div>
+    </fieldset>
+
+    <button id="save">Save</button>
+    <span id="status"></span>
+    <script type="module" src="./options.js"></script>
+  </body>
+</html>

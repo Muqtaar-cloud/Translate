@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-tsc/
+*.tsbuildinfo
+.env
+tools/bakeoff/data/

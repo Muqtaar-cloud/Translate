@@ -1,0 +1,49 @@
+<!--
+  Discord message list, reduced to the structure the adapter depends on.
+
+  Class names are intentionally absent: the adapter selects on id prefixes and
+  data attributes only, so a fixture full of hashed class names would test
+  nothing and would rot the moment Discord rebuilt.
+
+  Covers, in order: a plain foreign message, one with mentions/emoji/links, a
+  short message detection cannot judge, an English message that must never get
+  a layer, a reply with quoted context, and a message with an embed.
+-->
+<div data-list-id="chat-messages" role="list">
+  <li id="chat-messages-100-900001">
+    <h3><span id="message-username-900001">ana</span></h3>
+    <div id="message-content-900001">¿vienes mañana a la fiesta?</div>
+  </li>
+
+  <li id="chat-messages-100-900002">
+    <h3><span id="message-username-900002">ana</span></h3>
+    <div id="message-content-900002">jajaja <span>&lt;@123&gt;</span> otra vez con lo mismo :facepalm: https://example.com/a</div>
+  </li>
+
+  <li id="chat-messages-100-900003">
+    <h3><span id="message-username-900003">luis</span></h3>
+    <div id="message-content-900003">ya voy</div>
+  </li>
+
+  <li id="chat-messages-100-900004">
+    <h3><span id="message-username-900004">sam</span></h3>
+    <div id="message-content-900004">sounds good, see you all there tomorrow</div>
+  </li>
+
+  <li id="chat-messages-100-900005">
+    <h3><span id="message-username-900005">ana</span></h3>
+    <div id="message-reply-context-900005">luis: ya voy</div>
+    <div id="message-content-900005">
+      <div id="message-reply-context-900005-inner">luis: ya voy</div>
+      perfecto, te esperamos entonces
+    </div>
+  </li>
+
+  <li id="chat-messages-100-900006">
+    <h3><span id="message-username-900006">sam</span></h3>
+    <div id="message-content-900006">mirad esto</div>
+    <div id="message-accessories-900006">
+      <article>Embedded article title — Some Long Preview Text That Is Not Ours To Translate</article>
+    </div>
+  </li>
+</div>

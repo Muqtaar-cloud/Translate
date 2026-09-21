@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./tools/bakeoff"
+    },
+    {
+      "path": "./apps/extension"
+    },
+    {
+      "path": "./apps/bot"
+    }
+  ]
+}

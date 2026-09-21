@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Polyglot",
+  "version": "0.1.0",
+  "description": "Read multilingual Discord channels in your language. Translations render under the original, never replacing it.",
+  "minimum_chrome_version": "138",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://discord.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://discord.com/channels/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup/index.html", "default_title": "Polyglot — this channel" },
+  "options_ui": { "page": "options/index.html", "open_in_tab": true },
+  "optional_host_permissions": [
+    "https://api.deepl.com/*",
+    "https://api-free.deepl.com/*",
+    "https://api.anthropic.com/*"
+  ]
+}

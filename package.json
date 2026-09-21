@@ -1,0 +1,26 @@
+{
+  "name": "polyglot",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "typecheck": "tsc --build --force",
+    "build:ext": "node apps/extension/build.mjs",
+    "smoke": "npm run build:ext && node apps/extension/scripts/smoke.mjs",
+    "probe": "npx tsx tools/bakeoff/src/cli.ts probe"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.0",
+    "@types/node": "^22.7.0",
+    "esbuild": "^0.28.2",
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.14.5",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
