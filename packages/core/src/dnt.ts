@@ -14,6 +14,15 @@
 export interface MaskOptions {
   /** Builds the sentinel for span `i`. Default: U+27E6 i U+27E7, e.g. ⟦0⟧. */
   placeholder?: (i: number) => string;
+  /**
+   * Literal terms that must survive translation untouched — project names,
+   * in-jokes, handles that are not written as @mentions.
+   *
+   * Protected in both directions on purpose. A glossary is usually thought of
+   * as an outbound feature, but the same term is just as wrong when an engine
+   * "translates" it out of an inbound message.
+   */
+  protect?: readonly string[];
 }
 
 export interface MaskResult {
@@ -49,10 +58,26 @@ const PATTERNS: readonly RegExp[] = [
   /(?<![\w/])#[A-Za-z0-9._-]{2,32}/g, // plain #channels
 ];
 
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function mask(text: string, opts: MaskOptions = {}): MaskResult {
   const placeholder = opts.placeholder ?? defaultPlaceholder;
   const spans: string[] = [];
   let masked = text;
+
+  // Glossary terms first, and longest first, so "Polyglot Core" is protected as
+  // one term rather than being half-consumed by a shorter "Polyglot".
+  const protect = [...(opts.protect ?? [])]
+    .filter((t) => t.trim() !== "")
+    .sort((a, b) => b.length - a.length);
+
+  for (const term of protect) {
+    masked = masked.replace(new RegExp(escapeRegExp(term), "gi"), (match) => {
+      const i = spans.length;
+      spans.push(match); // keep the original casing, not the glossary's
+      return placeholder(i);
+    });
+  }
 
   for (const pattern of PATTERNS) {
     masked = masked.replace(new RegExp(pattern.source, pattern.flags), (match) => {

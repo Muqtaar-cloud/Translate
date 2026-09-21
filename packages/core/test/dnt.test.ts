@@ -50,3 +50,45 @@ describe("DNT masking (§3, §12)", () => {
     expect(restore(masked, spans, opts).text).toBe("hi <@7>");
   });
 });
+
+describe("glossary protection", () => {
+  it("protects a literal term from translation", () => {
+    const { masked, spans } = mask("ship Polyglot on friday", { protect: ["Polyglot"] });
+    expect(masked).not.toContain("Polyglot");
+    expect(spans).toContain("Polyglot");
+    expect(restore(masked, spans).text).toBe("ship Polyglot on friday");
+  });
+
+  it("matches case-insensitively but restores what was written", () => {
+    const { masked, spans } = mask("ship polyglot now", { protect: ["Polyglot"] });
+    expect(masked).not.toContain("polyglot");
+    expect(restore(masked, spans).text).toBe("ship polyglot now");
+  });
+
+  // Otherwise a shorter term eats the start of a longer one and the rest of the
+  // phrase gets translated anyway.
+  it("protects the longest matching term first", () => {
+    const { masked, spans } = mask("the Polyglot Core team", {
+      protect: ["Polyglot", "Polyglot Core"],
+    });
+    expect(spans).toContain("Polyglot Core");
+    expect(restore(masked, spans).text).toBe("the Polyglot Core team");
+  });
+
+  it("treats terms as literals, not patterns", () => {
+    const { masked, spans } = mask("costs $5 (roughly)", { protect: ["$5 (roughly)"] });
+    expect(restore(masked, spans).text).toBe("costs $5 (roughly)");
+  });
+
+  it("ignores blank glossary entries", () => {
+    expect(mask("hola", { protect: ["", "   "] }).spans).toEqual([]);
+  });
+
+  it("coexists with the built-in DNT patterns", () => {
+    const text = "ping <@1> about Polyglot at https://x.com";
+    const { masked, spans } = mask(text, { protect: ["Polyglot"] });
+    expect(masked).not.toContain("Polyglot");
+    expect(masked).not.toContain("<@1>");
+    expect(restore(masked, spans).text).toBe(text);
+  });
+});

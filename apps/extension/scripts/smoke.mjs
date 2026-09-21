@@ -41,7 +41,9 @@ const withFiller = fixture.replace(/<\/div>\s*$/, `${filler}</div>`);
 
 const page_html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Discord</title>
 <style>body{margin:0} li{margin:0 0 8px}</style></head>
-<body>${withFiller}</body></html>`;
+<body>${withFiller}
+<form><div data-slate-editor="true" contenteditable="true">are you coming tomorrow?</div></form>
+</body></html>`;
 
 // Extensions need the full Chromium binary, not the headless shell, and they
 // only load in headed or new-headless mode.
@@ -140,6 +142,33 @@ if (errors.length > 0) {
   for (const e of errors) console.log(`    ${e}`);
 }
 
+// --- outbound composer ---------------------------------------------------
+// Real Chromium honours execCommand("insertText") on a contenteditable, which
+// happy-dom cannot, so this is where the write path is actually exercised.
+await page.keyboard.down("Control");
+await page.keyboard.down("Shift");
+await page.keyboard.press("T");
+await page.keyboard.up("Shift");
+await page.keyboard.up("Control");
+await page.waitForTimeout(1500);
+
+const outbound = {
+  panelShown: (await page.locator("polyglot-outbound").count()) > 0,
+  panelText: await page
+    .locator("polyglot-outbound")
+    .first()
+    .evaluate((el) => el.shadowRoot?.querySelector(".panel")?.textContent?.trim() ?? "")
+    .catch(() => ""),
+  composerUnchanged:
+    (await page.locator("[data-slate-editor]").innerText()) === "are you coming tomorrow?",
+};
+
+console.log(`  outbound panel:        ${outbound.panelShown ? "opens on hotkey" : "did not open"}`);
+if (outbound.panelText) {
+  console.log(`    "${outbound.panelText.replace(/\s+/g, " ").slice(0, 100)}"`);
+}
+console.log(`  composer untouched until approved: ${outbound.composerUnchanged}`);
+
 // --- popup ---------------------------------------------------------------
 // Extension pages are only reachable at chrome-extension://<id>/..., and the
 // id is only knowable at runtime. The service worker's URL carries it.
@@ -198,6 +227,7 @@ const ok =
   popup.opened &&
   (popup.errors?.length ?? 0) === 0 &&
   survivedNavigation &&
+  outbound.composerUnchanged &&
   (report.translatorApiPresent ? report.layersInjected > 0 : report.bannerShown);
 
 console.log(`\n  ${ok ? "PASS" : "FAIL"}`);

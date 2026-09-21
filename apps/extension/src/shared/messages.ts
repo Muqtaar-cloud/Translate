@@ -35,7 +35,13 @@ export type ToBackground =
    * `contextWindow` cannot be separated in transit — the worker re-checks the
    * context policy before anything leaves the machine.
    */
-  | { type: "llm-translate"; request: import("@polyglot/core").TranslationRequest };
+  | { type: "llm-translate"; request: import("@polyglot/core").TranslationRequest }
+  /**
+   * Quota lives in the worker so one budget covers every tab, and so a reload
+   * cannot reset it.
+   */
+  | { type: "quota-remaining" }
+  | { type: "quota-record"; chars: number };
 
 export type FromBackground =
   | { type: "settings"; settings: import("./settings.js").Settings }
@@ -43,4 +49,5 @@ export type FromBackground =
   | { type: "error"; message: string }
   | { type: "cache-hit"; text: string }
   | { type: "cache-miss" }
+  | { type: "quota"; remaining: number }
   | { type: "ok" };

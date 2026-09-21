@@ -514,6 +514,28 @@ Any bilingual reader in the group then sees both and resolves it. That is
 strictly better than back-translation, costs nothing, and makes a bad
 translation self-correcting rather than silently wrong. On by default.
 
+**Built 2026-09-21, with three things worth recording.**
+
+*The composer cannot be written to by assigning DOM text.* Discord's message box
+is a Slate editor: setting `textContent` updates the view while React's model
+keeps the old value, so the message that sends is the one the user typed rather
+than the translation they approved — silently, under their name, which is the
+exact outcome the review step exists to prevent. The write goes through
+`execCommand("insertText")` with a synthetic-paste fallback, and is **verified
+by reading the editor back** rather than assumed. A refused write says so and
+tells the user to copy manually.
+
+*Outbound is `en → N`, which is the direction the built-in packs support
+natively.* Inbound for a non-English pair pivots through English (§4.1);
+outbound does not. So outbound is more often free and local than inbound is —
+the opposite of what one would assume from it being the "extra" feature.
+
+*The no-fallthrough rule applies here too.* A pack that is merely `downloadable`
+must never become a silent cloud request on the outbound path either. It is
+tempting to let it through — the user is staring at a panel and an error feels
+unhelpful — and that is precisely how content starts leaving the machine without
+anyone deciding it.
+
 **Why this is the cut.** §1 defines A's success as *"I read my channels"*, and
 §3's uncertainties don't include writing. Two of A's 7–8 weeks go to the one
 feature A isn't justified by. It is also the direction 0b doesn't test — 0b

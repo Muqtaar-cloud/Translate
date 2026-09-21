@@ -24,6 +24,15 @@ const SEL = {
   replyContext: '[id^="message-reply-context-"]',
   /** Author name, when the row carries one (grouped messages often don't). */
   username: '[id^="message-username-"]',
+  /**
+   * The message box, in priority order. Discord's composer is a Slate editor;
+   * `data-slate-editor` is its own marker and the most stable hook available.
+   */
+  composers: [
+    '[data-slate-editor="true"]',
+    'div[role="textbox"][contenteditable="true"]',
+    'form div[role="textbox"]',
+  ],
 } as const;
 
 /** `chat-messages-<channelId>-<messageId>` -> the message id. */
@@ -101,6 +110,14 @@ export class DiscordAdapter implements PlatformAdapter {
     // Immediately after the body text, and before any embed — the translation
     // belongs to the message, not to its link preview.
     return { parent: content.parentElement, before: content.nextSibling };
+  }
+
+  findComposer(doc: Document): HTMLElement | null {
+    for (const selector of SEL.composers) {
+      const el = doc.querySelector<HTMLElement>(selector);
+      if (el) return el;
+    }
+    return null;
   }
 
   selfCheck(doc: Document): AdapterHealth {

@@ -10,7 +10,9 @@
       fieldset { border: 1px solid #ccc; border-radius: 6px; margin: 16px 0; padding: 12px 16px; }
       legend { font-weight: 600; padding: 0 6px; }
       label { display: block; margin: 8px 0; }
-      input[type="text"], input[type="password"] { width: 100%; padding: 6px; box-sizing: border-box; }
+      input[type="text"], input[type="password"], input[type="number"], textarea {
+        width: 100%; padding: 6px; box-sizing: border-box; font: inherit;
+      }
       .warn { background: #fff6e5; border-left: 3px solid #f0b232; padding: 10px 12px; border-radius: 4px; }
       .counters { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; opacity: 0.8; }
       button { font: inherit; padding: 6px 14px; }
@@ -43,6 +45,27 @@
       <label>DeepL API key (stored on this device only, never synced)
         <input type="password" id="deeplKey" placeholder="xxxxxxxx-xxxx-…:fx" />
       </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sending messages</legend>
+      <p class="sub">
+        Ctrl/Cmd + Shift + T translates what you've typed and shows it for review.
+        It is put in the message box, never sent — you press Enter yourself.
+      </p>
+      <label><input type="checkbox" id="appendOriginal" /> Append the original under the translation</label>
+      <p class="sub">
+        Recommended. A back-translation check can't catch a wrong translation that
+        reads well, but anyone bilingual in the channel sees both lines and can
+        correct it.
+      </p>
+      <label>Never translate these words (one per line)
+        <textarea id="glossary" rows="3" placeholder="Polyglot&#10;standup"></textarea>
+      </label>
+      <label>Daily paid-character budget (on-device translation is free and unmetered)
+        <input type="number" id="dailyCharLimit" min="0" step="1000" />
+      </label>
+      <div class="counters" id="quota">—</div>
     </fieldset>
 
     <fieldset>

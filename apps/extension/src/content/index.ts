@@ -3,6 +3,7 @@ import { conversationIdFrom, DiscordAdapter } from "./discord.js";
 import { defaultGate } from "./gate.js";
 import { MessagingCache } from "./cache.js";
 import { RenderLoop } from "./loop.js";
+import { OutboundComposer } from "./outbound.js";
 import { showBrokenBanner } from "./banner.js";
 import { createDetector, PackManager, builtInAvailable } from "./translator.js";
 import { autoFor, loadSettings, watchSettings, type Settings } from "../shared/settings.js";
@@ -20,6 +21,7 @@ const packs = new PackManager();
 const cache = new MessagingCache();
 
 let loop: RenderLoop | null = null;
+let outbound: OutboundComposer | null = null;
 let detect: (text: string) => Promise<Detection[]> = async () => [];
 let settings: Settings | null = null;
 let currentConversation: string | null = null;
@@ -112,11 +114,37 @@ async function reconcile(): Promise<void> {
   });
 
   loop.start();
+
+  // Outbound rides on the same loop: its target language is whatever the
+  // channel has actually been speaking, which only the loop knows.
+  const activeLoop = loop;
+  outbound = new OutboundComposer({
+    adapter,
+    doc: document,
+    sourceLanguage: settings.target,
+    targetLanguage: () => activeLoop.dominantLanguage(),
+    glossary: () => settings?.glossary ?? [],
+    appendOriginal: () => settings?.appendOriginal ?? true,
+    translate: (source, target, text) => outboundTranslate(source, target, text),
+    backTranslate: (source, target, text) => outboundTranslate(source, target, text),
+    quota: {
+      remaining: async () => {
+        const reply = await chrome.runtime.sendMessage({ type: "quota-remaining" });
+        return reply?.type === "quota" ? (reply.remaining as number) : Number.POSITIVE_INFINITY;
+      },
+      record: async (chars) => {
+        await chrome.runtime.sendMessage({ type: "quota-record", chars });
+      },
+    },
+  });
+  outbound.attach();
 }
 
 function stop(): void {
   loop?.stop();
   loop = null;
+  outbound?.detach();
+  outbound = null;
 }
 
 /**
@@ -139,6 +167,52 @@ function watchNavigation(onChange: () => void): void {
   };
   globalThis.addEventListener("popstate", check);
   new MutationObserver(check).observe(document, { childList: true, subtree: true });
+}
+
+/**
+ * Translation for the outbound path.
+ *
+ * Applies the same rule as inbound routing, and for the same reason: a language
+ * pack that is merely *downloadable* must never become a silent cloud request.
+ * It would be easy to let outbound quietly fall through to DeepL — the user is
+ * waiting on a panel and an error feels unhelpful — but that is precisely how
+ * other people's messages start leaving the machine without anyone deciding it.
+ *
+ * `en → N` is also the direction Chrome's packs support natively, without the
+ * pivot that non-English inbound pairs take, so outbound is usually free and
+ * local once the pack is present.
+ */
+async function outboundTranslate(source: string, target: string, text: string): Promise<string> {
+  const state = availabilityFor(source, target);
+
+  if (state === "available") {
+    const local = await packs.translate(source, target, text);
+    if (local !== null) return local;
+  }
+
+  if (state === "downloadable" || state === "downloading") {
+    throw new Error(
+      `The ${source} → ${target} language pack isn't downloaded yet. ` +
+        "Download it from any message in this channel first.",
+    );
+  }
+
+  if (!settings?.cloudEnabled || !settings.cloudProvider) {
+    throw new Error(
+      `No translator available for ${source} → ${target}. ` +
+        "Download the language pack, or turn on a cloud provider in settings.",
+    );
+  }
+
+  const reply = await chrome.runtime.sendMessage({
+    type: "cloud-translate",
+    provider: settings.cloudProvider,
+    source,
+    target,
+    text,
+  });
+  if (reply?.type === "translation") return reply.text as string;
+  throw new Error(reply?.message ?? "translation failed");
 }
 
 async function waitForRoot(timeoutMs = 10_000): Promise<Element | null> {

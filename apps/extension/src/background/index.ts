@@ -1,6 +1,7 @@
 import type { FromBackground, ToBackground } from "../shared/messages.js";
 import { loadApiKey, loadSettings } from "../shared/settings.js";
 import { TranslationStore } from "./idb.js";
+import { emptyQuota, record as recordQuota, remaining as quotaRemaining, type QuotaState } from "@polyglot/core";
 import { translateWithLlm } from "./llm.js";
 
 /**
@@ -25,6 +26,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 /** Counters only. Message content never reaches this file. */
 const COUNTERS = "polyglot.counters";
+const QUOTA = "polyglot.quota";
+
+async function loadQuota(): Promise<QuotaState> {
+  const stored = await chrome.storage.local.get(QUOTA);
+  return (stored[QUOTA] as QuotaState | undefined) ?? emptyQuota();
+}
 
 async function bump(key: string): Promise<void> {
   const stored = await chrome.storage.local.get(COUNTERS);
@@ -139,6 +146,23 @@ chrome.runtime.onMessage.addListener(
             await bump("llm.error");
             respond({ type: "error", message: String(error) });
           }
+          break;
+        }
+
+        case "quota-remaining": {
+          const settings = await loadSettings();
+          respond({
+            type: "quota",
+            remaining: quotaRemaining(await loadQuota(), settings.dailyCharLimit),
+          });
+          break;
+        }
+
+        case "quota-record": {
+          await chrome.storage.local.set({
+            [QUOTA]: recordQuota(await loadQuota(), message.chars),
+          });
+          respond({ type: "ok" });
           break;
         }
 

@@ -1,4 +1,4 @@
-import type { LanguageCode } from "@polyglot/core";
+import { DEFAULT_DAILY_CHARS, type LanguageCode } from "@polyglot/core";
 
 export interface Settings {
   /** Languages I read. Never translated, never paid for. */
@@ -12,6 +12,19 @@ export interface Settings {
   cloudInDirectMessages: boolean;
   /** Per-(guild, channel) overrides, keyed by the adapter's conversationId. */
   perConversation: Record<string, { auto: boolean }>;
+
+  /**
+   * Append the original under an outbound translation.
+   *
+   * On by default, and it is the real mitigation for outbound risk: a bad
+   * translation becomes self-correcting because any bilingual reader sees both
+   * lines. Back-translation review cannot do that job — see outbound.ts.
+   */
+  appendOriginal: boolean;
+  /** Terms never to translate, in either direction: project names, in-jokes. */
+  glossary: string[];
+  /** Daily cap on paid characters. On-device translation is free and unmetered. */
+  dailyCharLimit: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -20,6 +33,9 @@ export const DEFAULT_SETTINGS: Settings = {
   cloudEnabled: false,
   cloudInDirectMessages: false,
   perConversation: {},
+  appendOriginal: true,
+  glossary: [],
+  dailyCharLimit: DEFAULT_DAILY_CHARS,
 };
 
 /**

@@ -20,6 +20,8 @@ Then `chrome://extensions` → Developer mode → Load unpacked → `apps/extens
 | `src/content/cache.ts` | Memory LRU in front of the worker's IndexedDB. |
 | `src/content/escalate.ts` | Context collection and the §5.1 policy check for the LLM path. |
 | `src/popup/` | Per-channel settings, reached from the toolbar icon. |
+| `src/content/outbound.ts` | The compose-and-review panel. Ctrl/Cmd+Shift+T. |
+| `src/content/composer.ts` | Writing into Discord's Slate editor, and verifying it took. |
 | `src/background/idb.ts` | The durable cache: 30-day TTL, 50MB LRU. |
 | `src/content/layer.ts` | The Shadow-DOM node that renders under the message. |
 | `src/content/translator.ts` | Built-in Translator/LanguageDetector, and the per-pair pack lifecycle. |
@@ -76,7 +78,25 @@ switches — a toggle that needed a reload would be the same as not working.
 service worker at runtime: 511 kB and dead, versus 11.5 kB and alive over
 `fetch`. See `src/background/llm.ts`.
 
+**Outbound never sends.** Ctrl/Cmd+Shift+T translates what you typed and shows
+it for review; the text goes into the message box and stops. Nothing in
+`outbound.ts` dispatches a key event, submits a form or clicks send, and there
+is a test that keeps it that way.
+
+Two things follow from that being the whole safety story. **Back-translation is
+shown as a rough check, not a guarantee** — it cannot catch a wrong translation
+that reads well, by construction, and the panel says so instead of showing a
+tick. **The original is appended by default**, which is the real mitigation: any
+bilingual reader in the channel sees both lines and resolves it.
+
+**Discord's composer cannot be written to by assigning DOM text.** It is a Slate
+editor; `textContent` updates the view while React keeps the old value, so the
+message that sends is the one you typed. The write goes through
+`execCommand("insertText")` with a paste fallback and is verified by reading
+back — a refused write tells you to copy manually rather than pretending.
+
 ## Not built yet
 
 Cloud translation works but is off by default and only DeepL is implemented.
-Outbound composer translation is Phase 4.
+Outbound quality is unmeasured: the Phase 0b bake-off rates `N → en`, and this
+is `en → N` — a different direction with a different failure profile.

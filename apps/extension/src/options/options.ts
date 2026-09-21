@@ -8,6 +8,9 @@ const cloud = $<HTMLInputElement>("cloud");
 const cloudDms = $<HTMLInputElement>("cloudDms");
 const deeplKey = $<HTMLInputElement>("deeplKey");
 const status = $<HTMLSpanElement>("status");
+const appendOriginal = $<HTMLInputElement>("appendOriginal");
+const glossary = $<HTMLTextAreaElement>("glossary");
+const dailyCharLimit = $<HTMLInputElement>("dailyCharLimit");
 
 const parseList = (value: string): string[] =>
   value.split(",").map((s) => s.trim()).filter(Boolean);
@@ -19,6 +22,15 @@ async function render(): Promise<void> {
   cloud.checked = settings.cloudEnabled;
   cloudDms.checked = settings.cloudInDirectMessages;
   deeplKey.value = (await loadApiKey("deepl")) ?? "";
+  appendOriginal.checked = settings.appendOriginal;
+  glossary.value = settings.glossary.join("\n");
+  dailyCharLimit.value = String(settings.dailyCharLimit);
+
+  const quotaStored = await chrome.storage.local.get("polyglot.quota");
+  const quota = quotaStored["polyglot.quota"] as { day: string; chars: number } | undefined;
+  $("quota").textContent = quota
+    ? `${quota.chars.toLocaleString()} paid characters used on ${quota.day}`
+    : "no paid characters used yet";
 
   const stored = await chrome.storage.local.get("polyglot.counters");
   const counters = (stored["polyglot.counters"] as Record<string, number>) ?? {};
@@ -39,6 +51,12 @@ $("save").addEventListener("click", () => {
       cloudEnabled: cloud.checked,
       cloudProvider: "deepl",
       cloudInDirectMessages: cloudDms.checked,
+      appendOriginal: appendOriginal.checked,
+      glossary: glossary.value
+        .split("\n")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      dailyCharLimit: Math.max(0, Number(dailyCharLimit.value) || 0),
     });
     if (deeplKey.value.trim() !== "") await saveApiKey("deepl", deeplKey.value.trim());
     status.textContent = "saved";

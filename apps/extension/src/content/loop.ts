@@ -110,6 +110,8 @@ export class RenderLoop {
   /** Gated, awaiting release. Not yet mounted, not yet costing anything. */
   private watched = new Map<string, { key: string; el: HTMLElement }>();
   private authorHistory = new Map<string, LanguageCode[]>();
+  /** Tally of confidently detected languages, used to pick an outbound target. */
+  private languageTally = new Map<LanguageCode, number>();
   private observer: MutationObserver | null = null;
   private root: Element | null = null;
   private stopped = false;
@@ -263,9 +265,12 @@ export class RenderLoop {
       return { kind: "idle" };
     }
 
-    if (extracted.author && resolution.source === "detector") {
-      const history = this.authorHistory.get(extracted.author) ?? [];
-      this.authorHistory.set(extracted.author, [resolution.lang, ...history].slice(0, 10));
+    if (resolution.source === "detector") {
+      this.languageTally.set(resolution.lang, (this.languageTally.get(resolution.lang) ?? 0) + 1);
+      if (extracted.author) {
+        const history = this.authorHistory.get(extracted.author) ?? [];
+        this.authorHistory.set(extracted.author, [resolution.lang, ...history].slice(0, 10));
+      }
     }
 
     return this.translate(resolution.lang, extracted.text);
@@ -440,5 +445,27 @@ export class RenderLoop {
 
   get watchedCount(): number {
     return this.watched.size;
+  }
+
+  /**
+   * The language this channel mostly speaks, or null if nothing has been read
+   * confidently yet.
+   *
+   * Outbound needs a target and guessing one would be worse than asking: sending
+   * a message in the wrong language is not recoverable the way a bad inbound
+   * translation is. Counts only confident detections, and only languages I do
+   * not already read — translating into my own language is not a send target.
+   */
+  dominantLanguage(): LanguageCode | null {
+    let best: LanguageCode | null = null;
+    let bestCount = 0;
+    for (const [lang, count] of this.languageTally) {
+      if (this.deps.knownLanguages.includes(lang)) continue;
+      if (count > bestCount) {
+        best = lang;
+        bestCount = count;
+      }
+    }
+    return best;
   }
 }

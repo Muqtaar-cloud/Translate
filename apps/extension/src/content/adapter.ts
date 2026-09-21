@@ -32,6 +32,14 @@ export interface PlatformAdapter {
   /** Where the translation layer goes relative to the message. */
   injectionPoint(el: HTMLElement): { parent: Element; before: Node | null } | null;
   /**
+   * The message box, when the platform has one on screen.
+   *
+   * Separate from the message list because outbound is a separate feature with
+   * a separate failure mode: a broken adapter here means a translation is
+   * silently dropped instead of being sent.
+   */
+  findComposer(doc: Document): HTMLElement | null;
+  /**
    * Cheap health check (PLAN.md §10). Run on load: if the page looks like this
    * platform but the adapter finds nothing, the selectors have rotted and the
    * user must be told, rather than silently getting an extension that does
