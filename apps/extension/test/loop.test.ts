@@ -642,3 +642,75 @@ describe("LLM escalation (§4.3, §5.1)", () => {
     expect(clickEscalate("900001")).toBe(false);
   });
 });
+
+/**
+ * PLAN.md §5 promises a visible indicator whenever a cloud provider is in use,
+ * and the options page now tells the user in as many words that anything
+ * translated in the cloud is marked.
+ *
+ * layer.test.ts proves the badge renders for a given state. This proves the
+ * state actually arrives that way from a real routing decision — which is what
+ * the promise on the options page is actually about.
+ */
+describe("cloud provenance, end to end", () => {
+  const cloudPolicy = {
+    knownLanguages: ["en"],
+    cloudEnabled: true,
+    cloudProvider: "deepl",
+    availability: () => "unavailable" as const,
+  };
+
+  const fakeDeepl = (): ReturnType<typeof vi.fn> =>
+    vi.fn(async (_p: string, _s: string, _t: string, text: string) => `DEEPL(${text})`);
+
+  it("marks a message a cloud provider translated", async () => {
+    const translateCloud = fakeDeepl();
+    const { loop, translateOnDevice } = makeLoop(
+      { translateCloud, policy: cloudPolicy },
+      "unavailable",
+    );
+
+    loop.start();
+    await settle(loop);
+
+    expect(translateCloud).toHaveBeenCalled();
+    expect(translateOnDevice).not.toHaveBeenCalled();
+    expect(layerTextFor("900001")).toContain("cloud");
+  });
+
+  it("leaves an on-device translation unmarked", async () => {
+    const { loop } = makeLoop();
+    loop.start();
+    await settle(loop);
+
+    expect(layerTextFor("900001")).toContain("EN(");
+    expect(layerTextFor("900001")).not.toContain("cloud");
+  });
+
+  // A cache hit returns from a different branch than a fresh translation, and
+  // it describes text that left the machine exactly as much as the first one
+  // did. Marking only the uncached case would make the badge mean "recently"
+  // rather than "this left".
+  it("still marks a cloud translation served from cache", async () => {
+    const cache = new MemoryOnlyCache();
+    const translateCloud = fakeDeepl();
+    const { loop } = makeLoop({ cache, translateCloud, policy: cloudPolicy }, "unavailable");
+
+    loop.start();
+    await settle(loop);
+    const callsAfterFirstPass = translateCloud.mock.calls.length;
+    expect(callsAfterFirstPass).toBeGreaterThan(0);
+
+    // The same text posted again, as a new message.
+    const fresh = document.createElement("li");
+    fresh.id = "chat-messages-100-900099";
+    fresh.innerHTML =
+      '<h3><span id="message-username-900099">ana</span></h3>' +
+      '<div id="message-content-900099">¿vienes mañana a la fiesta?</div>';
+    document.querySelector('[data-list-id="chat-messages"]')!.append(fresh);
+    await settle(loop);
+
+    expect(translateCloud.mock.calls.length).toBe(callsAfterFirstPass);
+    expect(layerTextFor("900099")).toContain("cloud");
+  });
+});
