@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Read multilingual Discord channels in your language. Translations render under the original, never replacing it.",
   "minimum_chrome_version": "138",
-  "permissions": ["storage"],
+  "permissions": ["storage", "alarms"],
   "host_permissions": ["https://discord.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "content_scripts": [

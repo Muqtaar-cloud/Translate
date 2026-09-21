@@ -1,6 +1,8 @@
 import type { Availability, Detection } from "@polyglot/core";
 import { DiscordAdapter } from "./discord.js";
 import { RenderLoop } from "./loop.js";
+import { defaultGate } from "./gate.js";
+import { MessagingCache } from "./cache.js";
 import { showBrokenBanner } from "./banner.js";
 import { createDetector, PackManager, builtInAvailable } from "./translator.js";
 import { autoFor, loadSettings } from "../shared/settings.js";
@@ -67,6 +69,10 @@ async function main(): Promise<void> {
       if (reply?.type === "translation") return reply.text as string;
       throw new Error(reply?.message ?? "cloud translation failed");
     },
+    // The cost defence: nothing is translated until it is near the viewport.
+    gate: defaultGate(),
+    // Memory LRU here, IndexedDB in the worker.
+    cache: new MessagingCache(),
     onNeedsDownload: (source, target) => {
       // Reached from a real click in the layer, which is what the platform
       // requires: create() will not download a pack outside a user gesture.

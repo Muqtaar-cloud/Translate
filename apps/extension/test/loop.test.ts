@@ -4,6 +4,7 @@ import { fixture } from "./fixture.js";
 import type { Availability, Detection } from "@polyglot/core";
 import { DiscordAdapter } from "../src/content/discord.js";
 import { fingerprint, nodeKey, RenderLoop, type LoopDeps } from "../src/content/loop.js";
+import { MemoryOnlyCache } from "../src/content/cache.js";
 
 const FIXTURE = fixture("discord-messages.html");
 
@@ -29,10 +30,20 @@ function makeLoop(over: Partial<LoopDeps> = {}, availability: Availability = "av
       cloudEnabled: false,
       availability: () => availability,
     },
+    batch: { debounceMs: 0 },
     ...over,
   };
 
   return { loop: new RenderLoop(deps), translateOnDevice, deps };
+}
+
+/**
+ * Release and translation are asynchronous now that the gate and batcher sit
+ * in the path, so sync() returning no longer means the layers are rendered.
+ */
+async function settle(loop: RenderLoop): Promise<void> {
+  await loop.sync();
+  await loop.drain();
 }
 
 const layersIn = (): HTMLElement[] => [...document.querySelectorAll("polyglot-layer")];
@@ -67,7 +78,7 @@ describe("render loop", () => {
   it("mounts a layer under each foreign message", async () => {
     const { loop } = makeLoop();
     expect(loop.start()).toBe(true);
-    await loop.sync();
+    await settle(loop);
 
     expect(layerTextFor("900001")).toContain("EN(¿vienes mañana a la fiesta?)");
     expect(layerTextFor("900001")).toContain("es → en");
@@ -77,7 +88,7 @@ describe("render loop", () => {
   it("renders nothing and spends nothing on an English message", async () => {
     const { loop, translateOnDevice } = makeLoop();
     loop.start();
-    await loop.sync();
+    await settle(loop);
 
     expect(layerTextFor("900004").trim()).toBe("");
     const translated = translateOnDevice.mock.calls.map((c) => c[2]);
@@ -87,7 +98,7 @@ describe("render loop", () => {
   it("keeps a mounted layer for a message detection could not judge", async () => {
     const { loop } = makeLoop();
     loop.start();
-    await loop.sync();
+    await settle(loop);
 
     // "ya voy" is under the reliable-length threshold; author stickiness has
     // nothing to go on yet. Nothing renders, but the node stays so the hover
@@ -100,7 +111,7 @@ describe("render loop", () => {
   it("does not translate the same message twice across syncs", async () => {
     const { loop, translateOnDevice } = makeLoop();
     loop.start();
-    await loop.sync();
+    await settle(loop);
     const first = translateOnDevice.mock.calls.length;
 
     await loop.sync();
@@ -111,12 +122,12 @@ describe("render loop", () => {
   it("re-translates an edited message and drops the stale layer", async () => {
     const { loop, translateOnDevice } = makeLoop();
     loop.start();
-    await loop.sync();
+    await settle(loop);
     const before = translateOnDevice.mock.calls.length;
 
     document.querySelector("#message-content-900001")!.textContent =
       "¿vienes el domingo a la fiesta?";
-    await loop.sync();
+    await settle(loop);
 
     expect(translateOnDevice.mock.calls.length).toBe(before + 1);
     expect(layerTextFor("900001")).toContain("domingo");
@@ -129,11 +140,11 @@ describe("render loop", () => {
   it("removes the layer when a message is deleted", async () => {
     const { loop } = makeLoop();
     loop.start();
-    await loop.sync();
+    await settle(loop);
     const before = layersIn().length;
 
     document.querySelector('li[id$="-900001"]')!.remove();
-    await loop.sync();
+    await settle(loop);
 
     expect(layersIn().length).toBe(before - 1);
   });
@@ -141,7 +152,7 @@ describe("render loop", () => {
   it("stops cleanly and takes its layers with it", async () => {
     const { loop } = makeLoop();
     loop.start();
-    await loop.sync();
+    await settle(loop);
     expect(layersIn().length).toBeGreaterThan(0);
 
     loop.stop();
@@ -173,7 +184,7 @@ describe("routing through the loop", () => {
     );
 
     loop.start();
-    await loop.sync();
+    await settle(loop);
 
     expect(translateCloud).not.toHaveBeenCalled();
     expect(translateOnDevice).not.toHaveBeenCalled();
@@ -184,7 +195,7 @@ describe("routing through the loop", () => {
   it("treats a null on-device result as a download prompt, not an error", async () => {
     const { loop } = makeLoop({ translateOnDevice: async () => null });
     loop.start();
-    await loop.sync();
+    await settle(loop);
     expect(layerTextFor("900001")).toMatch(/needs a language pack/);
   });
 
@@ -201,7 +212,7 @@ describe("routing through the loop", () => {
     });
 
     loop.start();
-    await loop.sync();
+    await settle(loop);
     expect(translateCloud).toHaveBeenCalled();
     expect(layerTextFor("900001")).toContain("cloud translation");
   });
@@ -211,7 +222,7 @@ describe("routing through the loop", () => {
       policy: { knownLanguages: ["en"], cloudEnabled: false, availability: () => "unavailable" },
     });
     loop.start();
-    await loop.sync();
+    await settle(loop);
     expect(layerTextFor("900001")).toMatch(/no provider for es → en/);
   });
 
@@ -222,7 +233,7 @@ describe("routing through the loop", () => {
       },
     });
     loop.start();
-    await loop.sync();
+    await settle(loop);
     expect(layerTextFor("900001")).toMatch(/translation failed/);
   });
 });
@@ -238,7 +249,7 @@ describe("DNT spans through the loop", () => {
     });
 
     loop.start();
-    await loop.sync();
+    await settle(loop);
 
     const sent = seen.find((t) => t.includes("jajaja"))!;
     expect(sent).not.toContain("<@123>");
@@ -252,16 +263,223 @@ describe("DNT spans through the loop", () => {
   });
 });
 
-describe("Phase 2 seam", () => {
-  it("honours a gating hook without the loop needing to change", async () => {
-    // This is where the IntersectionObserver goes. Wiring it now means adding
-    // viewport gating later is a parameter, not a rewrite.
-    const { loop, translateOnDevice } = makeLoop({
-      shouldTranslate: (el) => el.id.endsWith("900001"),
-    });
+
+describe("Phase 2: gating, caching, batching in the loop", () => {
+  /** A gate we open by hand, standing in for the viewport. */
+  class ManualGate {
+    private pending = new Map<HTMLElement, () => void>();
+    watch(el: HTMLElement, release: () => void): void {
+      this.pending.set(el, release);
+    }
+    unwatch(el: HTMLElement): void {
+      this.pending.delete(el);
+    }
+    disconnect(): void {
+      this.pending.clear();
+    }
+    releaseAll(): void {
+      const all = [...this.pending.values()];
+      this.pending.clear();
+      for (const r of all) r();
+    }
+    release(id: string): void {
+      for (const [el, r] of this.pending) {
+        if (el.id.endsWith(id)) {
+          this.pending.delete(el);
+          r();
+          return;
+        }
+      }
+    }
+    get size(): number {
+      return this.pending.size;
+    }
+  }
+
+  // The cost defence. A backlog nobody has scrolled to must cost nothing.
+  it("translates nothing while the gate stays shut", async () => {
+    const gate = new ManualGate();
+    const { loop, translateOnDevice } = makeLoop({ gate });
 
     loop.start();
-    await loop.sync();
-    expect(translateOnDevice).toHaveBeenCalledTimes(1);
+    await settle(loop);
+
+    expect(translateOnDevice).not.toHaveBeenCalled();
+    expect(layersIn()).toHaveLength(0);
+    expect(loop.watchedCount).toBe(6);
+  });
+
+  it("translates only what the gate releases", async () => {
+    const gate = new ManualGate();
+    const { loop, translateOnDevice } = makeLoop({ gate });
+
+    loop.start();
+    await settle(loop);
+    gate.release("900001");
+    await loop.drain();
+
+    expect(translateOnDevice).toHaveBeenCalledOnce();
+    expect(layersIn()).toHaveLength(1);
+    expect(layerTextFor("900001")).toContain("EN(¿vienes mañana a la fiesta?)");
+  });
+
+  it("does not build a layer for a message that was never released", async () => {
+    const gate = new ManualGate();
+    const { loop } = makeLoop({ gate });
+
+    loop.start();
+    await settle(loop);
+    gate.release("900001");
+    await loop.drain();
+
+    const other = document.querySelector('li[id$="-900002"]')!;
+    expect(other.querySelector("polyglot-layer")).toBeNull();
+  });
+
+  it("stops watching a message that is deleted before it is ever seen", async () => {
+    const gate = new ManualGate();
+    const { loop } = makeLoop({ gate });
+
+    loop.start();
+    await settle(loop);
+    expect(gate.size).toBe(6);
+
+    document.querySelector('li[id$="-900001"]')!.remove();
+    await settle(loop);
+
+    expect(gate.size).toBe(5);
+    expect(loop.watchedCount).toBe(5);
+  });
+
+  it("re-gates a message edited while it was still off-screen", async () => {
+    const gate = new ManualGate();
+    const { loop, translateOnDevice } = makeLoop({ gate });
+
+    loop.start();
+    await settle(loop);
+    document.querySelector("#message-content-900001")!.textContent = "¿vienes el lunes?";
+    await settle(loop);
+
+    gate.releaseAll();
+    await loop.drain();
+
+    // Translated once, with the new text — not once per version.
+    const calls = translateOnDevice.mock.calls.map((c) => c[2]);
+    expect(calls.filter((t) => t.includes("vienes"))).toEqual(["¿vienes el lunes?"]);
+  });
+
+  describe("cache", () => {
+    it("serves a repeat of the same text without translating again", async () => {
+      const cache = new MemoryOnlyCache();
+      const gate = new ManualGate();
+      const { loop, translateOnDevice } = makeLoop({ cache, gate });
+
+      loop.start();
+      await settle(loop);
+      gate.release("900001");
+      await loop.drain();
+      expect(translateOnDevice).toHaveBeenCalledOnce();
+
+      // Same text posted again as a new message.
+      const fresh = document.createElement("li");
+      fresh.id = "chat-messages-100-900099";
+      fresh.innerHTML =
+        '<h3><span id="message-username-900099">ana</span></h3>' +
+        '<div id="message-content-900099">¿vienes mañana a la fiesta?</div>';
+      document.querySelector('[data-list-id="chat-messages"]')!.append(fresh);
+
+      await settle(loop);
+      gate.release("900099");
+      await loop.drain();
+
+      expect(translateOnDevice).toHaveBeenCalledOnce(); // still one
+      expect(layerTextFor("900099")).toContain("EN(¿vienes mañana a la fiesta?)");
+    });
+
+    it("keeps a cache hit out of the batcher's debounce window", async () => {
+      const cache = new MemoryOnlyCache();
+      await cache.put({ text: "¿vienes mañana a la fiesta?", source: "es", target: "en" }, "on-device", "cached!");
+
+      const { loop, translateOnDevice } = makeLoop({
+        cache,
+        batch: { debounceMs: 60_000 },
+      });
+
+      loop.start();
+      // No drain: if a hit waited on the batcher this would still be pending.
+      await loop.sync();
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(layerTextFor("900001")).toContain("cached!");
+      expect(translateOnDevice).not.toHaveBeenCalled();
+    });
+
+    it("does not let one message's cache entry answer another's", async () => {
+      const cache = new MemoryOnlyCache();
+      const { loop } = makeLoop({ cache });
+
+      loop.start();
+      await settle(loop);
+
+      expect(layerTextFor("900001")).toContain("¿vienes mañana a la fiesta?");
+      expect(layerTextFor("900002")).toContain("jajaja");
+    });
+  });
+
+  describe("batching", () => {
+    it("coalesces identical messages into a single translation", async () => {
+      const gate = new ManualGate();
+      const { loop, translateOnDevice } = makeLoop({
+        gate,
+        // No cache, so a shared dispatch is the only thing that can dedupe.
+        cache: { get: async () => null, put: async () => {} },
+        batch: { debounceMs: 5 },
+      });
+
+      const list = document.querySelector('[data-list-id="chat-messages"]')!;
+      for (const id of ["900101", "900102", "900103"]) {
+        const li = document.createElement("li");
+        li.id = `chat-messages-100-${id}`;
+        li.innerHTML = `<div id="message-content-${id}">buenos días a todos</div>`;
+        list.append(li);
+      }
+
+      loop.start();
+      await settle(loop);
+      gate.releaseAll();
+      await loop.drain();
+
+      const greetings = translateOnDevice.mock.calls
+        .map((c) => c[2])
+        .filter((t) => t.includes("buenos días"));
+      expect(greetings).toHaveLength(1);
+      for (const id of ["900101", "900102", "900103"]) {
+        expect(layerTextFor(id)).toContain("EN(buenos días a todos)");
+      }
+    });
+
+    it("keeps concurrent translations under the ceiling", async () => {
+      let active = 0;
+      let peak = 0;
+      const gate = new ManualGate();
+      const { loop } = makeLoop({
+        gate,
+        batch: { debounceMs: 5, concurrency: 2 },
+        translateOnDevice: async (_s, _t, text) => {
+          active++;
+          peak = Math.max(peak, active);
+          await new Promise((r) => setTimeout(r, 1));
+          active--;
+          return `EN(${text})`;
+        },
+      });
+
+      loop.start();
+      await settle(loop);
+      gate.releaseAll();
+      await loop.drain();
+
+      expect(peak).toBeLessThanOrEqual(2);
+    });
   });
 });

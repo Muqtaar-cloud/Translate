@@ -5,17 +5,27 @@ import {
   route,
   type Detection,
   type LanguageCode,
+  type Route,
   type RoutingPolicy,
 } from "@polyglot/core";
 import type { ExtractedMessage, PlatformAdapter } from "./adapter.js";
+import { Batcher, mapWithLimit } from "./batch.js";
+import { MemoryOnlyCache, type TranslationCache } from "./cache.js";
+import { ImmediateGate, type Gate } from "./gate.js";
 import { TranslationLayer, type LayerState } from "./layer.js";
 
 /**
  * The render loop: DOM in, layers out.
  *
- * Phase 1 wires the lifecycle. Viewport gating and batching are Phase 2 — the
- * `shouldTranslate` hook below is where the IntersectionObserver goes, and it
- * is a parameter now so adding it later is not a rewrite.
+ * Order of operations, and why:
+ *
+ *   mutation -> extract -> **gate** -> cache -> **batch** -> translate -> inject
+ *
+ * The gate comes before everything that costs anything. Nothing is extracted
+ * into a translation, no cache is consulted and no layer is built until a
+ * message is near the viewport, because a 500-message scrollback must not cost
+ * 500 translations. The cache is consulted before the batcher so a hit never
+ * waits out the debounce window.
  */
 
 /**
@@ -45,23 +55,34 @@ export function fingerprint(text: string): string {
  */
 export const nodeKey = (id: string, text: string): string => `${id}@${fingerprint(text)}`;
 
+/** One unit of translation work, after routing has decided where it goes. */
+interface TranslateJob {
+  masked: string;
+  source: LanguageCode;
+  target: LanguageCode;
+  decision: Extract<Route, { kind: "on-device" } | { kind: "cloud-mt" }>;
+}
+
 export interface LoopDeps {
   adapter: PlatformAdapter;
   doc: Document;
   policy: RoutingPolicy;
   target: LanguageCode;
-  /** Injected — built-in in the browser, a fake in tests (PLAN.md §4.5). */
+  knownLanguages: readonly LanguageCode[];
+  /** Injected — built-in in the browser, a fake in tests. */
   detect(text: string): Promise<Detection[]>;
   /** Returns null when the pack is not ready; never falls back to cloud. */
   translateOnDevice(source: string, target: string, text: string): Promise<string | null>;
-  /** Cloud path. Phase 1 leaves this unimplemented; routing still decides it. */
   translateCloud?: (provider: string, source: string, target: string, text: string) => Promise<string>;
-  /** Called when a pair needs a user gesture to download its pack. */
   onNeedsDownload?: (source: string, target: string) => void;
-  /** Phase 2 hook: viewport gating goes here without restructuring the loop. */
-  shouldTranslate?: (el: HTMLElement) => boolean;
-  /** Per-author language stickiness for short messages. */
-  knownLanguages: readonly LanguageCode[];
+  /**
+   * Gating policy, injected rather than assumed. A viewport gate in the
+   * browser; a demand gate (reply command, reaction) for a consumer with no
+   * viewport. Defaults to releasing everything.
+   */
+  gate?: Gate;
+  cache?: TranslationCache;
+  batch?: { debounceMs?: number; maxSize?: number; concurrency?: number };
 }
 
 interface Mounted {
@@ -71,18 +92,55 @@ interface Mounted {
 
 export class RenderLoop {
   private deps: LoopDeps;
+  private gate: Gate;
+  private cache: TranslationCache;
+  private batcher: Batcher<TranslateJob, string | null>;
+
   private mounted = new Map<string, Mounted>();
+  /** Gated, awaiting release. Not yet mounted, not yet costing anything. */
+  private watched = new Map<string, { key: string; el: HTMLElement }>();
   private authorHistory = new Map<string, LanguageCode[]>();
   private observer: MutationObserver | null = null;
   private root: Element | null = null;
+  private stopped = false;
+  /** Release tasks still running, so `drain()` can wait for a stable state. */
+  private inflight = new Set<Promise<void>>();
 
   constructor(deps: LoopDeps) {
     this.deps = deps;
+    this.gate = deps.gate ?? new ImmediateGate();
+    this.cache = deps.cache ?? new MemoryOnlyCache();
+
+    const concurrency = deps.batch?.concurrency ?? 4;
+    this.batcher = new Batcher<TranslateJob, string | null>(
+      async (items) => {
+        const results = new Map<string, string | null>();
+        // On-device has no batch endpoint, so this is a concurrency ceiling
+        // rather than a request bundle. A cloud provider that accepts an array
+        // would group its items here instead — see batch.ts.
+        const settled = await mapWithLimit(items, concurrency, async (item) => {
+          const { masked, source, target, decision } = item.value;
+          const text =
+            decision.kind === "on-device"
+              ? await this.deps.translateOnDevice(source, target, masked)
+              : ((await this.deps.translateCloud?.(decision.provider, source, target, masked)) ??
+                null);
+          return [item.key, text] as const;
+        });
+        for (const [key, text] of settled) results.set(key, text);
+        return results;
+      },
+      {
+        debounceMs: deps.batch?.debounceMs ?? 150,
+        maxSize: deps.batch?.maxSize ?? 20,
+      },
+    );
   }
 
   start(): boolean {
     this.root = this.deps.adapter.observeRoot(this.deps.doc);
     if (!this.root) return false;
+    this.stopped = false;
 
     this.observer = new MutationObserver(() => {
       void this.sync();
@@ -94,53 +152,75 @@ export class RenderLoop {
   }
 
   stop(): void {
+    this.stopped = true;
     this.observer?.disconnect();
     this.observer = null;
+    this.gate.disconnect();
     for (const m of this.mounted.values()) m.layer.remove();
     this.mounted.clear();
+    this.watched.clear();
   }
 
-  /** Public for tests: process the current DOM once. */
+  /** Public for tests: reconcile the current DOM once. */
   async sync(): Promise<void> {
-    if (!this.root) return;
+    if (!this.root || this.stopped) return;
     const messages = this.deps.adapter.findMessages(this.root);
-    const seen = new Set<string>();
+    const liveIds = new Set<string>();
 
     for (const el of messages) {
       const extracted = this.deps.adapter.extract(el);
       if (!extracted) continue;
+      liveIds.add(extracted.id);
 
       const key = nodeKey(extracted.id, extracted.text);
-      seen.add(key);
 
-      const existing = this.mounted.get(extracted.id);
-      if (existing) {
-        if (existing.key === key) continue; // unchanged; layer stands
-        // Edited. Drop the stale layer and fall through to re-translate.
-        existing.layer.remove();
+      const mounted = this.mounted.get(extracted.id);
+      if (mounted) {
+        if (mounted.key === key) continue; // unchanged; layer stands
+        mounted.layer.remove(); // edited; drop stale layer and re-gate
         this.mounted.delete(extracted.id);
       }
 
-      if (this.deps.shouldTranslate && !this.deps.shouldTranslate(el)) continue;
+      const watched = this.watched.get(extracted.id);
+      if (watched) {
+        if (watched.key === key) continue; // already waiting on the gate
+        this.gate.unwatch(watched.el); // edited before it was ever released
+        this.watched.delete(extracted.id);
+      }
 
-      await this.mount(el, extracted, key);
+      this.watched.set(extracted.id, { key, el });
+      this.gate.watch(el, () => {
+        const task = this.release(el, extracted, key);
+        this.inflight.add(task);
+        void task.finally(() => this.inflight.delete(task));
+      });
     }
 
-    // Deleted messages: a layer whose message is no longer in the DOM.
+    // Deletions: anything we hold whose message left the DOM.
     for (const [id, m] of [...this.mounted]) {
-      const stillPresent = messages.some((el) => this.deps.adapter.extract(el)?.id === id);
-      if (!stillPresent) {
-        m.layer.remove();
-        this.mounted.delete(id);
-      }
+      if (liveIds.has(id)) continue;
+      m.layer.remove();
+      this.mounted.delete(id);
+    }
+    for (const [id, w] of [...this.watched]) {
+      if (liveIds.has(id)) continue;
+      this.gate.unwatch(w.el);
+      this.watched.delete(id);
     }
   }
 
-  private async mount(
+  /** The gate opened: this message is worth spending on. */
+  private async release(
     el: HTMLElement,
     extracted: ExtractedMessage,
     key: string,
   ): Promise<void> {
+    if (this.stopped) return;
+
+    const watched = this.watched.get(extracted.id);
+    if (!watched || watched.key !== key) return; // superseded by an edit
+    this.watched.delete(extracted.id);
+
     const point = this.deps.adapter.injectionPoint(el);
     if (!point) return;
 
@@ -153,8 +233,7 @@ export class RenderLoop {
     layer.attachHoverAffordance(el);
     this.mounted.set(extracted.id, { key, layer });
 
-    const state = await this.resolveAndTranslate(extracted);
-    layer.render(state);
+    layer.render(await this.resolveAndTranslate(extracted));
   }
 
   private async resolveAndTranslate(extracted: ExtractedMessage): Promise<LayerState> {
@@ -166,7 +245,7 @@ export class RenderLoop {
 
     if (resolution.lang === null) {
       // Nothing renders, but the layer stays mounted so the hover globe is
-      // there. This is the false-negative case and the affordance is the
+      // reachable. This is the false-negative case and the affordance is the
       // mitigation.
       return { kind: "idle" };
     }
@@ -181,11 +260,7 @@ export class RenderLoop {
 
   private async translate(source: LanguageCode, text: string): Promise<LayerState> {
     const target = this.deps.target;
-
-    const decision = route(
-      { text, source, target, initiation: "automatic" },
-      this.deps.policy,
-    );
+    const decision = route({ text, source, target, initiation: "automatic" }, this.deps.policy);
 
     switch (decision.kind) {
       case "skip":
@@ -200,22 +275,48 @@ export class RenderLoop {
         return { kind: "failed", reason: `no provider for ${source} → ${target}` };
 
       case "on-device":
-      case "cloud-mt": {
-        const { masked, spans } = mask(text);
-        try {
-          const raw =
-            decision.kind === "on-device"
-              ? await this.deps.translateOnDevice(source, target, masked)
-              : await this.deps.translateCloud?.(decision.provider, source, target, masked);
+      case "cloud-mt":
+        return this.dispatch(source, target, text, decision);
+    }
+  }
 
-          if (raw == null) return { kind: "needs-download", source, target };
+  private async dispatch(
+    source: LanguageCode,
+    target: LanguageCode,
+    text: string,
+    decision: TranslateJob["decision"],
+  ): Promise<LayerState> {
+    const provider = decision.kind === "on-device" ? "on-device" : decision.provider;
+    const { masked, spans } = mask(text);
 
-          const { text: restored } = restore(raw, spans);
-          return { kind: "translated", text: restored, source, target };
-        } catch (error) {
-          return { kind: "failed", reason: String(error) };
-        }
-      }
+    // No context window: this is the automatic path, and thread context is
+    // permitted only on user-initiated paths.
+    const cacheable = { text, source, target };
+
+    const hit = await this.cache.get(cacheable, provider);
+    if (hit !== null) {
+      // Ahead of the batcher on purpose — a hit must not wait out the debounce.
+      const { text: restored } = restore(hit, spans);
+      return { kind: "translated", text: restored, source, target };
+    }
+
+    try {
+      // Keyed on the masked text and pair, so six people typing the same thing
+      // in one window cost one translation.
+      const raw = await this.batcher.add(`${provider}|${source}|${target}|${masked}`, {
+        masked,
+        source,
+        target,
+        decision,
+      });
+
+      if (raw == null) return { kind: "needs-download", source, target };
+
+      await this.cache.put(cacheable, provider, raw);
+      const { text: restored } = restore(raw, spans);
+      return { kind: "translated", text: restored, source, target };
+    } catch (error) {
+      return { kind: "failed", reason: String(error) };
     }
   }
 
@@ -230,8 +331,29 @@ export class RenderLoop {
     layer.render(await this.translate(source, extracted.text));
   }
 
-  /** Test/diagnostic accessor. */
+  /**
+   * Waits until nothing is in flight.
+   *
+   * Release is asynchronous and the batcher deliberately waits for more work,
+   * so `sync()` returning does not mean the layers are rendered. Tests and
+   * teardown need a stable point; this alternates letting queued work reach the
+   * batcher with flushing it, rather than awaiting in-flight tasks first, which
+   * would deadlock against the debounce.
+   */
+  async drain(): Promise<void> {
+    for (let i = 0; i < 25; i++) {
+      if (this.inflight.size === 0 && this.batcher.pending === 0) break;
+      await new Promise((r) => setTimeout(r, 0));
+      await this.batcher.flush();
+    }
+    await Promise.all([...this.inflight]);
+  }
+
   get mountedCount(): number {
     return this.mounted.size;
+  }
+
+  get watchedCount(): number {
+    return this.watched.size;
   }
 }

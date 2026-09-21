@@ -235,6 +235,23 @@ MutationObserver → queue → IntersectionObserver releases near-viewport only 
 debounce ~150ms → batch → inject → mark done. Scrolling past 500 backlog
 messages must not fire 500 translations.
 
+**Measured 2026-09-21** (built extension, real Chromium, 66-message channel):
+10 messages translated on load, 18 after scrolling to the bottom, **48 never
+touched**. Jumping to the end deliberately does not translate what was scrolled
+past. Gating works, and it is the cost defence as claimed.
+
+**Correction to "batch ~20 segments into one provider request".** That presumed
+a batch endpoint. Chrome's built-in Translator has none — `translate()` takes
+one string and returns one string — so on the automatic path batching cannot
+reduce the number of calls. What it does buy is (a) **dedupe within the
+window**, so six people typing "gm" in the same second cost one translation,
+(b) a **concurrency ceiling**, so releasing a screenful of backlog does not fire
+forty simultaneous model invocations at the main thread, and (c) the one place a
+cloud provider *can* bundle, since DeepL takes an array. The batch size is a
+coalescing and concurrency window on-device and a real request bundle on cloud.
+Worth stating plainly, because "batching" implied a cost saving on the automatic
+path that is not available there.
+
 - **Edits:** key on `(messageId, hash(currentText))`, so an edit invalidates and
   a virtualized remount of unchanged text hits cache and re-injects free. One
   rule covers both, by construction.

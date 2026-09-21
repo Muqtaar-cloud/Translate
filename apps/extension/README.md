@@ -14,7 +14,11 @@ Then `chrome://extensions` → Developer mode → Load unpacked → `apps/extens
 | File | Does |
 |---|---|
 | `src/content/discord.ts` | The only platform-specific code. Selectors, extraction, injection point, self-check. |
-| `src/content/loop.ts` | MutationObserver → extract → route → inject. Owns the edit/delete lifecycle. |
+| `src/content/loop.ts` | MutationObserver → extract → gate → cache → batch → inject. Owns the edit/delete lifecycle. |
+| `src/content/gate.ts` | Viewport gating. The cost defence. |
+| `src/content/batch.ts` | Coalescing, debounce and the concurrency ceiling. |
+| `src/content/cache.ts` | Memory LRU in front of the worker's IndexedDB. |
+| `src/background/idb.ts` | The durable cache: 30-day TTL, 50MB LRU. |
 | `src/content/layer.ts` | The Shadow-DOM node that renders under the message. |
 | `src/content/translator.ts` | Built-in Translator/LanguageDetector, and the per-pair pack lifecycle. |
 | `src/content/banner.ts` | "Polyglot can't read this page" — breakage the user can see. |
@@ -37,10 +41,20 @@ but hasn't clicked through a pack download silently ships their messages to
 DeepL — for a pair that was about to be free and local. It is its own terminal
 route, and there is a test that keeps it that way.
 
+**Gating comes before everything that costs anything.** No cache lookup, no
+layer, no translation until a message is near the viewport. Measured on a
+66-message channel in real Chromium: 10 translated on load, 18 after scrolling
+to the bottom, 48 never touched.
+
+**The durable cache lives in the worker, not the content script.** A content
+script's IndexedDB belongs to *discord.com's* origin — Discord can clear it and
+no other tab can share it. The worker runs on the extension origin.
+
+**Batching does not reduce calls on the automatic path.** The built-in
+Translator has no batch endpoint. Batching buys dedupe within the window and a
+concurrency ceiling; request bundling only applies to cloud. See `batch.ts`.
+
 ## Not built yet
 
-Viewport gating and batching are Phase 2; `LoopDeps.shouldTranslate` is the seam
-where the IntersectionObserver goes, wired now so adding it is a parameter
-rather than a rewrite. IndexedDB caching, per-channel settings and the LLM
-escalation button are also Phase 2. Cloud translation works but is off by
-default and only DeepL is implemented.
+Per-channel settings UI and the LLM escalation button. Cloud translation works
+but is off by default and only DeepL is implemented.

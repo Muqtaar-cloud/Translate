@@ -22,10 +22,19 @@ export type ToBackground =
    * Counters only. No message content, ever.
    */
   | { type: "report-availability"; pair: string; state: Availability }
-  | { type: "report-adapter-health"; adapter: string; ok: boolean; detail: string };
+  | { type: "report-adapter-health"; adapter: string; ok: boolean; detail: string }
+  /**
+   * The durable cache lives in the worker, not here: a content script's
+   * IndexedDB belongs to discord.com's origin, where Discord can clear it and
+   * where no other tab can share it.
+   */
+  | { type: "cache-get"; key: string }
+  | { type: "cache-put"; key: string; text: string; tier: string };
 
 export type FromBackground =
   | { type: "settings"; settings: import("./settings.js").Settings }
   | { type: "translation"; text: string }
   | { type: "error"; message: string }
+  | { type: "cache-hit"; text: string }
+  | { type: "cache-miss" }
   | { type: "ok" };

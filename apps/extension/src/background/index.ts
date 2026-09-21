@@ -1,5 +1,6 @@
 import type { FromBackground, ToBackground } from "../shared/messages.js";
 import { loadApiKey, loadSettings } from "../shared/settings.js";
+import { TranslationStore } from "./idb.js";
 
 /**
  * MV3 service worker.
@@ -8,6 +9,18 @@ import { loadApiKey, loadSettings } from "../shared/settings.js";
  * on-device translation: Chrome's built-in Translator is unavailable in Web
  * Worker contexts, and this is one. That work lives in the content script.
  */
+
+const store = new TranslationStore();
+
+/**
+ * Eviction walks the whole store, so it runs on a schedule rather than on every
+ * write, which would make writes O(n).
+ */
+const EVICT_ALARM = "polyglot.evict";
+chrome.alarms.create(EVICT_ALARM, { periodInMinutes: 60 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === EVICT_ALARM) void store.evict();
+});
 
 /** Counters only. Message content never reaches this file. */
 const COUNTERS = "polyglot.counters";
@@ -96,6 +109,27 @@ chrome.runtime.onMessage.addListener(
 
         case "report-adapter-health":
           await bump(`adapter.${message.adapter}.${message.ok ? "ok" : "broken"}`);
+          respond({ type: "ok" });
+          break;
+
+        case "cache-get": {
+          try {
+            const text = await store.get(message.key);
+            await bump(text === null ? "cache.miss" : "cache.hit");
+            respond(text === null ? { type: "cache-miss" } : { type: "cache-hit", text });
+          } catch {
+            // A broken cache must never break translation.
+            respond({ type: "cache-miss" });
+          }
+          break;
+        }
+
+        case "cache-put":
+          try {
+            await store.put(message.key, message.text, message.tier);
+          } catch {
+            // Losing a write costs a future translation, not correctness.
+          }
           respond({ type: "ok" });
           break;
       }
