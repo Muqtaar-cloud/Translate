@@ -62,7 +62,7 @@ interface TranslateJob {
   masked: string;
   source: LanguageCode;
   target: LanguageCode;
-  decision: Extract<Route, { kind: "on-device" } | { kind: "cloud-mt" }>;
+  decision: Extract<Route, { kind: "local" } | { kind: "cloud-mt" }>;
 }
 
 export interface LoopDeps {
@@ -133,7 +133,7 @@ export class RenderLoop {
         const settled = await mapWithLimit(items, concurrency, async (item) => {
           const { masked, source, target, decision } = item.value;
           const text =
-            decision.kind === "on-device"
+            decision.kind === "local"
               ? await this.deps.translateOnDevice(source, target, masked)
               : ((await this.deps.translateCloud?.(decision.provider, source, target, masked)) ??
                 null);
@@ -292,7 +292,7 @@ export class RenderLoop {
       case "unsupported":
         return { kind: "failed", reason: `no provider for ${source} → ${target}` };
 
-      case "on-device":
+      case "local":
       case "cloud-mt":
         return this.dispatch(source, target, text, decision);
     }
@@ -304,7 +304,7 @@ export class RenderLoop {
     text: string,
     decision: TranslateJob["decision"],
   ): Promise<LayerState> {
-    const provider = decision.kind === "on-device" ? "on-device" : decision.provider;
+    const provider = decision.kind === "local" ? "on-device" : decision.provider;
     const { masked, spans } = mask(text);
 
     // No context window: this is the automatic path, and thread context is

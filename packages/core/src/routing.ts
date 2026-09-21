@@ -6,7 +6,8 @@ import type { Availability, LanguageCode, TranslationRequest } from "./types.js"
  */
 export type Route =
   | { kind: "skip"; reason: "known-language" | "too-short" | "undetected" }
-  | { kind: "on-device"; source: LanguageCode; target: LanguageCode }
+  /** Free and local to whichever consumer is asking — see RoutingPolicy. */
+  | { kind: "local"; source: LanguageCode; target: LanguageCode }
   | {
       kind: "needs-pack-download";
       source: LanguageCode;
@@ -21,9 +22,15 @@ export interface RoutingPolicy {
   cloudEnabled: boolean;
   cloudProvider?: string;
   /**
-   * Injected, per PLAN.md §11: the package must not assume an on-device
-   * provider exists. A consumer with no built-in Translator (the bot, §8)
-   * supplies a function that always returns "unavailable".
+   * Injected, per PLAN.md §11: the package must not assume what "free and
+   * local" means for the caller.
+   *
+   * In the extension that is a downloaded language pack. In the bot it is a
+   * self-hosted model on the same box — different mechanism, same economics,
+   * and a consumer with neither returns "unavailable" for everything. The route
+   * is named `local` rather than `on-device` for this reason: the extension's
+   * vocabulary had leaked into a package that is supposed to be neutral about
+   * who is calling it, and the second consumer is what exposed it.
    */
   availability: (source: LanguageCode, target: LanguageCode) => Availability;
 }
@@ -50,7 +57,7 @@ export function route(req: TranslationRequest, policy: RoutingPolicy): Route {
   const availability = policy.availability(source, target);
 
   if (availability === "available") {
-    return { kind: "on-device", source, target };
+    return { kind: "local", source, target };
   }
 
   if (availability === "downloadable" || availability === "downloading") {

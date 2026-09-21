@@ -449,6 +449,23 @@ personal tool needs a decision it has never been given.
 **Re-budgeted: 3–4 weeks, not 2** — self-hosted inference, hosting, a
 preferences database and deploys are not two weeks — **and gated on 0b.**
 
+**Built 2026-09-21, ahead of that gate. Two asymmetries this section missed:**
+
+*There is no language detector on a server.* The browser hands the extension one
+free. NLLB needs an explicit source language, and "translate into everyone's
+language" is meaningless without knowing the source, so the bot has to bring its
+own — a hand-rolled heuristic, weaker than the browser's and weakest on short
+messages, which is most of chat. A real quality gap between the two products,
+and something the bake-off should measure before Phase 3 is trusted.
+
+*`knownLanguages` is an extension-shaped idea.* It means "languages the reader
+already reads", which assumes one reader. A bot has many, with different lists,
+so no single value is right — and the obvious-looking choice (the source
+language) makes routing skip every translation. The shared package survived the
+second consumer, but not without exposing where its vocabulary came from: the
+route formerly called `on-device` is now `local`, because what is free and local
+is a downloaded pack in one consumer and a self-hosted model in the other.
+
 ---
 
 ## 9. Phases

@@ -22,6 +22,9 @@ translation-quality bake-off, and the harness for it is built:
   translation layer, per-pair language-pack UX, viewport gating, batching, a
   two-level cache, per-channel settings, the LLM escalation button and the
   outbound compose-and-review panel. ([how to run it](apps/extension/README.md))
+- **`apps/bot`** — Phase 3: a Telegram bot that translates on request, with
+  demand gating in place of viewport gating and self-hosted MT in place of an
+  on-device one. ([how to run it](apps/bot/README.md))
 
 The quality gate still hasn't run — it needs real chat data and bilingual
 raters. Phase 1 was built ahead of it by explicit decision; if the gate comes
@@ -29,7 +32,7 @@ back bad, this code is a sunk cost and the plan says so.
 
 ```bash
 npm install
-npm test          # 217 tests
+npm test          # 268 tests
 npm run typecheck
 npm run build:ext # -> apps/extension/dist, load unpacked in Chrome
 npm run smoke     # loads it into real Chromium against a fake Discord page

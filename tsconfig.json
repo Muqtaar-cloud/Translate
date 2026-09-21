@@ -9,6 +9,9 @@
     },
     {
       "path": "./apps/extension"
+    },
+    {
+      "path": "./apps/bot"
     }
   ]
 }

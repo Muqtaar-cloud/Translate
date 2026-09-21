@@ -1,0 +1,8 @@
+{
+  "name": "@polyglot/bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "polyglot-bot": "./src/index.ts" },
+  "dependencies": { "@polyglot/core": "*" }
+}

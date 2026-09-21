@@ -25,9 +25,9 @@ describe("route", () => {
     });
   });
 
-  it("uses the on-device path when the pack is present", () => {
+  it("uses the local path when the pair is available to this consumer", () => {
     expect(route(req(), policy("available"))).toEqual({
-      kind: "on-device",
+      kind: "local",
       source: "es",
       target: "en",
     });
@@ -74,8 +74,8 @@ describe("route", () => {
     }
   });
 
-  // PLAN.md §11: the package must not assume an on-device provider exists.
-  it("works for a consumer with no on-device provider at all (the bot)", () => {
+  // PLAN.md §11: the package must not assume what "local" means for the caller.
+  it("works for a consumer with no local provider at all", () => {
     const botPolicy = policy("unavailable", {
       cloudEnabled: true,
       cloudProvider: "nllb-selfhosted",
