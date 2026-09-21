@@ -25,6 +25,17 @@ export interface Settings {
   glossary: string[];
   /** Daily cap on paid characters. On-device translation is free and unmetered. */
   dailyCharLimit: number;
+
+  /**
+   * When cloud was last turned on, and for which provider.
+   *
+   * §5 asks for one-time explicit consent *naming the provider*, which is an
+   * event rather than a notice on a wall. Recording it means a future provider
+   * can ask again rather than inheriting an agreement the user made about a
+   * different company. Cleared when cloud is turned off, so the next time is a
+   * fresh decision.
+   */
+  cloudConsent?: { provider: string; at: string };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -46,6 +57,28 @@ export const DEFAULT_SETTINGS: Settings = {
  * re-pasting a DeepL key every time the browser reopened, which reads as
  * security and is just breakage.
  */
+/**
+ * What the consent record becomes when the cloud toggle is saved.
+ *
+ * Pure and separate from the options page so the rule is testable: a consent
+ * record that is wrong is worse than none, because it is evidence of an
+ * agreement that was never made.
+ *
+ * - Off: no record. Re-enabling later is a fresh decision.
+ * - Newly on, or on for a different provider: a new record, dated now.
+ * - Already on for the same provider: the original date is kept, so saving an
+ *   unrelated setting does not re-date the consent.
+ */
+export function nextCloudConsent(
+  next: { enabled: boolean; provider: string },
+  previous: { enabled: boolean; consent: { provider: string; at: string } | undefined },
+  at: string,
+): { provider: string; at: string } | null {
+  if (!next.enabled) return null;
+  if (previous.enabled && previous.consent?.provider === next.provider) return previous.consent;
+  return { provider: next.provider, at };
+}
+
 const KEY = "polyglot.settings";
 
 export async function loadSettings(): Promise<Settings> {

@@ -1,4 +1,5 @@
 import {
+  leavesDevice,
   mask,
   resolve,
   restore,
@@ -316,6 +317,10 @@ export class RenderLoop {
     decision: TranslateJob["decision"],
   ): Promise<LayerState> {
     const provider = decision.kind === "local" ? "on-device" : decision.provider;
+    // Marks the layer when the text left the machine. leavesDevice is the same
+    // predicate the privacy rules are written against, rather than a second
+    // opinion about what counts as cloud.
+    const via = leavesDevice(decision) ? "cloud" : "auto";
     const { masked, spans } = mask(text);
 
     // No context window: this is the automatic path, and thread context is
@@ -326,7 +331,7 @@ export class RenderLoop {
     if (hit !== null) {
       // Ahead of the batcher on purpose — a hit must not wait out the debounce.
       const { text: restored } = restore(hit, spans);
-      return { kind: "translated", text: restored, source, target, via: "auto" };
+      return { kind: "translated", text: restored, source, target, via };
     }
 
     try {
@@ -343,7 +348,7 @@ export class RenderLoop {
 
       await this.cache.put(cacheable, provider, raw);
       const { text: restored } = restore(raw, spans);
-      return { kind: "translated", text: restored, source, target, via: "auto" };
+      return { kind: "translated", text: restored, source, target, via };
     } catch (error) {
       return { kind: "failed", reason: String(error) };
     }

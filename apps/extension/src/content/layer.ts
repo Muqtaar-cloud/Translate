@@ -23,8 +23,16 @@ export type LayerState =
       text: string;
       source: string;
       target: string;
-      /** Which tier produced this. "llm" is only ever reached by a user action. */
-      via?: "auto" | "llm";
+      /**
+       * Which tier produced this.
+       *
+       * "cloud" and "llm" both mean the text left this machine; "auto" means it
+       * never did. §5 promises a visible indicator whenever a cloud provider is
+       * in use, and the options page now says so in as many words, so a
+       * DeepL-translated line must not look identical to a local one.
+       * "llm" is only ever reached by a user action.
+       */
+      via?: "auto" | "cloud" | "llm";
     }
   | { kind: "pending" }
   | { kind: "escalating" }
@@ -127,6 +135,14 @@ export class TranslationLayer {
 
         this.wrap.append(badge, text);
 
+        if (state.via === "cloud") {
+          const mark = doc.createElement("span");
+          mark.className = "badge";
+          mark.textContent = " · cloud";
+          mark.title = "Translated by a cloud provider — this message left your machine";
+          this.wrap.append(mark);
+        }
+
         if (state.via === "llm") {
           // Worth distinguishing: this one cost an API call and sent the
           // preceding few messages off the machine. The user chose that, and
@@ -136,7 +152,9 @@ export class TranslationLayer {
           mark.textContent = " · ai";
           mark.title = "Translated with context by an LLM, at your request";
           this.wrap.append(mark);
-        } else if (this.callbacks.onEscalate) {
+        }
+
+        if (state.via !== "llm" && this.callbacks.onEscalate) {
           const escalate = doc.createElement("button");
           escalate.textContent = "translate properly";
           escalate.title =

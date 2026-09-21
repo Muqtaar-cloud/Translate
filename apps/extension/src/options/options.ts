@@ -1,4 +1,11 @@
-import { DEFAULT_SETTINGS, loadApiKey, loadSettings, saveApiKey, saveSettings } from "../shared/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  loadApiKey,
+  loadSettings,
+  nextCloudConsent,
+  saveApiKey,
+  saveSettings,
+} from "../shared/settings.js";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -22,6 +29,11 @@ async function render(): Promise<void> {
   cloud.checked = settings.cloudEnabled;
   cloudDms.checked = settings.cloudInDirectMessages;
   deeplKey.value = (await loadApiKey("deepl")) ?? "";
+
+  const consent = settings.cloudConsent;
+  $("consentRecord").textContent = consent
+    ? `You turned this on for ${consent.provider} on ${new Date(consent.at).toLocaleString()}.`
+    : "";
   appendOriginal.checked = settings.appendOriginal;
   glossary.value = settings.glossary.join("\n");
   dailyCharLimit.value = String(settings.dailyCharLimit);
@@ -43,9 +55,20 @@ async function render(): Promise<void> {
 
 $("save").addEventListener("click", () => {
   void (async () => {
+    // Pulled out of the spread so that turning cloud off *removes* the record
+    // rather than carrying the old one forward.
+    const { cloudConsent: priorConsent, ...previous } = await loadSettings();
+
+    const cloudConsent = nextCloudConsent(
+      { enabled: cloud.checked, provider: "deepl" },
+      { enabled: previous.cloudEnabled, consent: priorConsent },
+      new Date().toISOString(),
+    );
+
     await saveSettings({
       ...DEFAULT_SETTINGS,
-      ...(await loadSettings()),
+      ...previous,
+      ...(cloudConsent ? { cloudConsent } : {}),
       knownLanguages: parseList(known.value),
       target: target.value.trim() || "en",
       cloudEnabled: cloud.checked,

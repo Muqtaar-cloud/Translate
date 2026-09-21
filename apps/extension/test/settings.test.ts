@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   loadApiKey,
   loadSettings,
+  nextCloudConsent,
   saveApiKey,
   saveSettings,
   setConversationAuto,
@@ -163,5 +164,40 @@ describe("watchSettings", () => {
     watchSettings(seen)();
     await setConversationAuto("discord:555/memes", false);
     expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+// PLAN.md §5 asks for one-time explicit consent naming the provider. A record
+// that is wrong is worse than no record, because it is evidence of an agreement
+// that was never made.
+describe("cloud consent", () => {
+  const consent = { provider: "deepl", at: "2026-01-01T00:00:00.000Z" };
+  const now = "2026-09-21T12:00:00.000Z";
+
+  it("records consent when cloud is first turned on", () => {
+    expect(
+      nextCloudConsent({ enabled: true, provider: "deepl" }, { enabled: false, consent: undefined }, now),
+    ).toEqual({ provider: "deepl", at: now });
+  });
+
+  it("drops the record when cloud is turned off", () => {
+    expect(nextCloudConsent({ enabled: false, provider: "deepl" }, { enabled: true, consent }, now)).toBeNull();
+  });
+
+  it("keeps the original date while it stays on", () => {
+    expect(nextCloudConsent({ enabled: true, provider: "deepl" }, { enabled: true, consent }, now)).toBe(consent);
+  });
+
+  // Consent was given about a named company, so it does not transfer.
+  it("asks again for a different provider", () => {
+    expect(
+      nextCloudConsent({ enabled: true, provider: "google" }, { enabled: true, consent }, now),
+    ).toEqual({ provider: "google", at: now });
+  });
+
+  it("re-dates consent when cloud is turned back on after being off", () => {
+    expect(
+      nextCloudConsent({ enabled: true, provider: "deepl" }, { enabled: false, consent }, now),
+    ).toEqual({ provider: "deepl", at: now });
   });
 });

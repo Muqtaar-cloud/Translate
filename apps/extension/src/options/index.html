@@ -14,6 +14,8 @@
         width: 100%; padding: 6px; box-sizing: border-box; font: inherit;
       }
       .warn { background: #fff6e5; border-left: 3px solid #f0b232; padding: 10px 12px; border-radius: 4px; }
+      ul.sub { margin: 4px 0 8px; padding-left: 20px; }
+      ul.sub li { margin: 4px 0; }
       .counters { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; opacity: 0.8; }
       button { font: inherit; padding: 6px 14px; }
     </style>
@@ -35,16 +37,46 @@
     <fieldset>
       <legend>Cloud translation</legend>
       <p class="warn">
-        On-device translation keeps every message on this machine. Turning on a
-        cloud provider sends messages — <strong>including other people's</strong> —
-        to that provider. They have not agreed to that, and you cannot agree on
-        their behalf. Off by default for that reason.
+        On-device translation keeps every message on this machine. Turning this
+        on sends message text to <strong>DeepL</strong>, a company outside this
+        browser — including messages <strong>other people wrote</strong>. They
+        have not agreed to that, and you cannot agree on their behalf. It is off
+        by default for that reason. Turning it back off stops it immediately.
       </p>
-      <label><input type="checkbox" id="cloud" /> Use a cloud provider when a pair isn't available on-device</label>
+      <p class="sub">What gets sent, and when:</p>
+      <ul class="sub">
+        <li>
+          Only messages in a language this device cannot translate locally. When
+          a language pack is available it is always used first, and nothing
+          leaves the machine. A pack that is merely <em>downloadable</em> never
+          becomes a cloud request — you are asked to download it instead.
+        </li>
+        <li>
+          Only in channels. Direct messages are excluded unless you separately
+          tick the box below.
+        </li>
+        <li>
+          When you press <em>translate properly</em> on a message, the few
+          messages before it are sent as well, as context. Text only — no names,
+          no timestamps, no attachments. That button does nothing while this
+          setting is off.
+        </li>
+      </ul>
+      <p class="sub">
+        Anything translated in the cloud is marked <strong>cloud</strong> in the
+        layer under the message, so you can always tell which ones left.
+      </p>
+      <label><input type="checkbox" id="cloud" /> Send to DeepL when a language isn't available on this device</label>
       <label><input type="checkbox" id="cloudDms" /> Also in direct messages</label>
+      <p class="sub">
+        A group channel is a room you are already sharing. A DM is usually two
+        people, so it is gated separately rather than coming along with the tick
+        above.
+      </p>
       <label>DeepL API key (stored on this device only, never synced)
         <input type="password" id="deeplKey" placeholder="xxxxxxxx-xxxx-…:fx" />
       </label>
+      <p class="sub" id="consentRecord"></p>
     </fieldset>
 
     <fieldset>

@@ -320,6 +320,23 @@ Minimisation, which is what's actually on offer:
 - Cloud opt-in per provider; DMs excluded by default; no content in logs or
   telemetry, ever; visible indicator when a cloud provider is live.
 
+**Built, and two things it turned up.** The options page states, at the toggle:
+that the provider is DeepL by name; that the messages sent include other
+people's, who have not agreed and on whose behalf the user cannot agree; that a
+merely `downloadable` pack never becomes a cloud request; that DMs are gated
+separately and why; and that *translate properly* also sends the few preceding
+messages as context, text only, and does nothing while cloud is off. Consent is
+recorded (provider and date) rather than merely displayed, dropped when cloud is
+switched off, and re-asked for a different provider — consent was given about a
+named company, so it does not transfer.
+
+Writing it exposed a gap: **a DeepL-translated layer was rendered identically to
+an on-device one**, so the §5 promise of a visible indicator was not kept for
+cloud MT — only for LLM escalations. A cloud result is now marked `· cloud`,
+keyed off `leavesDevice()`, the same predicate these rules are written against.
+Copy that describes a product honestly is a test of the product, and this one
+failed it.
+
 ### 5.1 The context rule — decided now, before the tempting result arrives
 
 §3 makes thread context a hypothesis that 0b will test. If 0b says context
