@@ -1,6 +1,7 @@
 import type { FromBackground, ToBackground } from "../shared/messages.js";
 import { loadApiKey, loadSettings } from "../shared/settings.js";
 import { TranslationStore } from "./idb.js";
+import { translateWithLlm } from "./llm.js";
 
 /**
  * MV3 service worker.
@@ -124,6 +125,23 @@ chrome.runtime.onMessage.addListener(
           break;
         }
 
+        case "llm-translate": {
+          const key = await loadApiKey("anthropic");
+          if (!key) {
+            respond({ type: "error", message: "no Anthropic API key set" });
+            break;
+          }
+          try {
+            const text = await translateWithLlm(message.request, key);
+            await bump("llm.ok");
+            respond({ type: "translation", text });
+          } catch (error) {
+            await bump("llm.error");
+            respond({ type: "error", message: String(error) });
+          }
+          break;
+        }
+
         case "cache-put":
           try {
             await store.put(message.key, message.text, message.tier);
@@ -137,3 +155,14 @@ chrome.runtime.onMessage.addListener(
     return true; // async response
   },
 );
+
+/**
+ * Readiness marker.
+ *
+ * The module body completing is not a given: a dependency that reaches for a
+ * Node API throws on import, the listener below is never installed, and every
+ * cache lookup silently degrades to a miss with nothing in the page to show for
+ * it. The smoke test asserts this flag, which is the only externally visible
+ * evidence that the worker actually finished loading.
+ */
+(globalThis as { __polyglotReady?: boolean }).__polyglotReady = true;

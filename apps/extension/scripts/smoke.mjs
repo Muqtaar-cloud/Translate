@@ -60,6 +60,27 @@ const context = await chromium.launchPersistentContext("", {
 });
 
 const errors = [];
+
+/**
+ * The service worker is checked explicitly because a bundling success is not a
+ * runtime success: a dependency that reaches for a Node API blows up on import,
+ * the top-level body never finishes, the message listener is never installed,
+ * and every cache lookup silently falls back to a miss. That failure is
+ * invisible from the page.
+ */
+let worker = context.serviceWorkers()[0];
+if (!worker) {
+  worker = await context.waitForEvent("serviceworker", { timeout: 15000 }).catch(() => null);
+}
+// Playwright's worker evaluation world does not expose chrome.runtime, so the
+// worker reports its own readiness instead: the flag is set at the very end of
+// the module body, and only gets set if nothing threw on the way there.
+const workerAlive = worker
+  ? await worker
+      .evaluate(() => globalThis.__polyglotReady === true)
+      .catch((e) => `evaluate failed: ${String(e)}`)
+  : false;
+
 const page = await context.newPage();
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 page.on("console", (m) => {
@@ -93,6 +114,12 @@ const report = {
     .evaluate((el) => el.shadowRoot?.querySelector(".detail")?.textContent ?? "")
     .catch(() => ""),
   translatorApiPresent: await page.evaluate(() => "Translator" in globalThis),
+  workerRegistered: Boolean(worker),
+  workerAlive,
+  escalateButtons: await page.locator("polyglot-layer").evaluateAll(
+    (nodes) =>
+      nodes.filter((n) => n.shadowRoot?.querySelector('[data-polyglot="escalate"]')).length,
+  ),
 };
 
 console.log("Extension smoke test\n");
@@ -100,12 +127,57 @@ console.log(`  messages on page:      ${report.messagesRendered}`);
 console.log(`  layers before scroll:  ${report.gatedBefore}   (viewport gating)`);
 console.log(`  layers after scroll:   ${report.gatedAfter}`);
 console.log(`  Translator API:        ${report.translatorApiPresent}`);
+console.log(`  service worker:        registered=${report.workerRegistered} alive=${report.workerAlive}`);
+console.log(
+  `  escalation buttons:    ${report.escalateButtons}` +
+    " (0 expected here: with no language packs every layer is in the download state,\n" +
+    "                          which deliberately offers no LLM button — see below)",
+);
 console.log(`  broken/unavailable banner: ${report.bannerShown}`);
 if (report.bannerText) console.log(`    "${report.bannerText.trim()}"`);
 if (errors.length > 0) {
   console.log("\n  errors:");
   for (const e of errors) console.log(`    ${e}`);
 }
+
+// --- popup ---------------------------------------------------------------
+// Extension pages are only reachable at chrome-extension://<id>/..., and the
+// id is only knowable at runtime. The service worker's URL carries it.
+const extensionId = worker ? new URL(worker.url()).host : null;
+let popup = { opened: false, text: "" };
+if (extensionId) {
+  const popupPage = await context.newPage();
+  const popupErrors = [];
+  popupPage.on("pageerror", (e) => popupErrors.push(String(e)));
+  await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`);
+  await popupPage.waitForTimeout(500);
+  popup = {
+    opened: true,
+    text: (await popupPage.locator("body").innerText()).replace(/\s+/g, " ").trim(),
+    errors: popupErrors,
+  };
+  await popupPage.close();
+}
+
+console.log(`  popup:                 ${popup.opened ? "loads" : "NOT REACHABLE"}`);
+console.log(
+  "    (opened as a tab, so its own tab is the active one and it correctly reports\n" +
+    "     'not a Discord channel'. What this proves is that it loads and runs clean;\n" +
+    "     the channel-detection path is covered by the unit tests instead.)",
+);
+if (popup.text) console.log(`    "${popup.text.slice(0, 90)}"`);
+if (popup.errors?.length) console.log(`    errors: ${popup.errors.join("; ")}`);
+
+// --- SPA channel switch ---------------------------------------------------
+// Discord changes channel without a page load. If the content script does not
+// notice, a per-channel setting silently applies to the wrong channel.
+await page.evaluate(() => {
+  history.pushState({}, "", "/channels/555/999");
+  dispatchEvent(new PopStateEvent("popstate"));
+});
+await page.waitForTimeout(1500);
+const survivedNavigation = (await page.locator("polyglot-layer").count()) > 0;
+console.log(`  survives channel switch: ${survivedNavigation}`);
 
 await context.close();
 
@@ -122,6 +194,10 @@ console.log(
 const ok =
   report.messagesRendered === 6 + FILLER &&
   gatingWorks &&
+  report.workerAlive === true &&
+  popup.opened &&
+  (popup.errors?.length ?? 0) === 0 &&
+  survivedNavigation &&
   (report.translatorApiPresent ? report.layersInjected > 0 : report.bannerShown);
 
 console.log(`\n  ${ok ? "PASS" : "FAIL"}`);

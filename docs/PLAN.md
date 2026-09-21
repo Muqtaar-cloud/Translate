@@ -556,6 +556,16 @@ TypeScript strict; WXT for MV3; Preact in Shadow DOM; Vitest + Playwright; Zod.
 for API keys** — `session` is cleared on browser restart, `sync` must never carry
 keys.
 
+**Measured 2026-09-21: `@anthropic-ai/sdk` cannot be used in the MV3 service
+worker.** It bundles cleanly and then breaks the worker at runtime — the module
+body never completes, so `chrome.runtime.onMessage` is never registered and
+every message, including every cache lookup, silently degrades to a no-op. With
+the SDK the bundle is 511 kB and the worker is dead; without it, 11.5 kB and
+alive. The LLM escalation therefore calls the Messages API over `fetch`. The
+SDK remains the right default everywhere it runs; shipping a dead service
+worker to honour a default would be worse. Bundle size matters here
+independently, since this worker is woken by every cache lookup.
+
 The provider/routing/cache package is shared by the extension and the bot — but
 v2 asserted that on day one without noticing that **its primary branch doesn't
 exist in one consumer and its cost assumptions hold in only one** (§8). So, as a

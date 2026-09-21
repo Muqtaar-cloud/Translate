@@ -18,8 +18,16 @@
  */
 
 export type LayerState =
-  | { kind: "translated"; text: string; source: string; target: string }
+  | {
+      kind: "translated";
+      text: string;
+      source: string;
+      target: string;
+      /** Which tier produced this. "llm" is only ever reached by a user action. */
+      via?: "auto" | "llm";
+    }
   | { kind: "pending" }
+  | { kind: "escalating" }
   | { kind: "needs-download"; source: string; target: string }
   | { kind: "downloading"; progress: number }
   | { kind: "failed"; reason: string }
@@ -31,6 +39,13 @@ export interface LayerCallbacks {
   onTranslateRequest(): void;
   /** Pack download. Fires from a real click, which the browser requires. */
   onEnablePack(source: string, target: string): void;
+  /**
+   * "Translate properly" — the LLM escalation (PLAN.md §4.3).
+   *
+   * Only ever reached from a click. This is the one path permitted to send
+   * thread context, and being user-initiated is what makes that bound true.
+   */
+  onEscalate?(): void;
 }
 
 const STYLE = `
@@ -109,6 +124,29 @@ export class TranslationLayer {
         text.setAttribute("lang", state.target);
 
         this.wrap.append(badge, text);
+
+        if (state.via === "llm") {
+          // Worth distinguishing: this one cost an API call and sent the
+          // preceding few messages off the machine. The user chose that, and
+          // the layer should not pretend it was the same as the free path.
+          const mark = doc.createElement("span");
+          mark.className = "badge";
+          mark.textContent = " · ai";
+          mark.title = "Translated with context by an LLM, at your request";
+          this.wrap.append(mark);
+        } else if (this.callbacks.onEscalate) {
+          const escalate = doc.createElement("button");
+          escalate.textContent = "translate properly";
+          escalate.title =
+            "Re-translate with an LLM using the last few messages as context. " +
+            "Sends those messages to a cloud provider.";
+          escalate.setAttribute("data-polyglot", "escalate");
+          escalate.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.callbacks.onEscalate?.();
+          });
+          this.wrap.append(escalate);
+        }
         // Names the layer for screen readers, which would otherwise read every
         // message twice with no indication that the second pass is a machine
         // translation.
@@ -121,6 +159,14 @@ export class TranslationLayer {
         const el = doc.createElement("span");
         el.className = "muted";
         el.textContent = "translating…";
+        this.wrap.append(el);
+        break;
+      }
+
+      case "escalating": {
+        const el = doc.createElement("span");
+        el.className = "muted";
+        el.textContent = "re-translating with context…";
         this.wrap.append(el);
         break;
       }
@@ -159,8 +205,19 @@ export class TranslationLayer {
       case "failed": {
         const el = doc.createElement("span");
         el.className = "muted";
-        el.textContent = `translation failed: ${state.reason}`;
+        el.textContent = `translation failed: ${state.reason} `;
         this.wrap.append(el);
+
+        if (this.callbacks.onEscalate) {
+          const escalate = doc.createElement("button");
+          escalate.textContent = "try with an LLM";
+          escalate.setAttribute("data-polyglot", "escalate");
+          escalate.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.callbacks.onEscalate?.();
+          });
+          this.wrap.append(escalate);
+        }
         break;
       }
 

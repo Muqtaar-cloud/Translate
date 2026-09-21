@@ -18,6 +18,8 @@ Then `chrome://extensions` → Developer mode → Load unpacked → `apps/extens
 | `src/content/gate.ts` | Viewport gating. The cost defence. |
 | `src/content/batch.ts` | Coalescing, debounce and the concurrency ceiling. |
 | `src/content/cache.ts` | Memory LRU in front of the worker's IndexedDB. |
+| `src/content/escalate.ts` | Context collection and the §5.1 policy check for the LLM path. |
+| `src/popup/` | Per-channel settings, reached from the toolbar icon. |
 | `src/background/idb.ts` | The durable cache: 30-day TTL, 50MB LRU. |
 | `src/content/layer.ts` | The Shadow-DOM node that renders under the message. |
 | `src/content/translator.ts` | Built-in Translator/LanguageDetector, and the per-pair pack lifecycle. |
@@ -54,7 +56,27 @@ no other tab can share it. The worker runs on the extension origin.
 Translator has no batch endpoint. Batching buys dedupe within the window and a
 concurrency ceiling; request bundling only applies to cloud. See `batch.ts`.
 
+**The LLM is a button, never a route.** "Translate properly" re-translates one
+message with the previous few as context. That is the only path that reaches an
+LLM, the only one that sends context, and the only one that writes the
+context-assisted cache tier. `assertContextPolicy` is checked in the content
+script *and* again in the worker, because the worker is the last place before
+content leaves the machine.
+
+It deliberately does **not** appear on the `needs-download` state. With no
+language packs every layer starts there, so putting it there would funnel every
+first-run user straight into a paid cloud call.
+
+**Per-channel settings live in the popup, not the options page.** "Translate
+this channel automatically" is a decision made while looking at the channel.
+The content script reconciles on settings change *and* on Discord's SPA channel
+switches — a toggle that needed a reload would be the same as not working.
+
+**`@anthropic-ai/sdk` does not work here.** It bundles and then kills the
+service worker at runtime: 511 kB and dead, versus 11.5 kB and alive over
+`fetch`. See `src/background/llm.ts`.
+
 ## Not built yet
 
-Per-channel settings UI and the LLM escalation button. Cloud translation works
-but is off by default and only DeepL is implemented.
+Cloud translation works but is off by default and only DeepL is implemented.
+Outbound composer translation is Phase 4.

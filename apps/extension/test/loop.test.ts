@@ -483,3 +483,152 @@ describe("Phase 2: gating, caching, batching in the loop", () => {
     });
   });
 });
+
+describe("LLM escalation (§4.3, §5.1)", () => {
+  const clickEscalate = (id: string): boolean => {
+    const li = document.querySelector(`li[id$="-${id}"]`)!;
+    const button = li
+      .querySelector("polyglot-layer")
+      ?.shadowRoot?.querySelector<HTMLButtonElement>('[data-polyglot="escalate"]');
+    button?.click();
+    return Boolean(button);
+  };
+
+  it("offers no escalation button when no LLM path is wired", async () => {
+    const { loop } = makeLoop();
+    loop.start();
+    await settle(loop);
+    expect(clickEscalate("900001")).toBe(false);
+  });
+
+  it("offers one on a translated message once the path exists", async () => {
+    const { loop } = makeLoop({ translateLlm: async () => "properly translated" });
+    loop.start();
+    await settle(loop);
+    expect(clickEscalate("900001")).toBe(true);
+  });
+
+  it("re-translates with the LLM and marks the result as such", async () => {
+    const translateLlm = vi.fn(async () => "are you coming to the party tomorrow?");
+    const { loop } = makeLoop({ translateLlm });
+
+    loop.start();
+    await settle(loop);
+    clickEscalate("900001");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(translateLlm).toHaveBeenCalledOnce();
+    expect(layerTextFor("900001")).toContain("are you coming to the party tomorrow?");
+    // Distinguished from the free path: this one cost money and sent context.
+    expect(layerTextFor("900001")).toContain("ai");
+  });
+
+  // The whole point of the escalation being user-initiated.
+  it("sends bounded thread context, marked user-initiated", async () => {
+    let captured: Parameters<NonNullable<LoopDeps["translateLlm"]>>[0] | null = null;
+    const { loop } = makeLoop({
+      translateLlm: async (request) => {
+        captured = request;
+        return "ok";
+      },
+    });
+
+    loop.start();
+    await settle(loop);
+    // 900002 rather than 900003: the latter is the short message detection
+    // cannot judge, so it renders idle and carries the hover globe instead of
+    // an escalation button.
+    clickEscalate("900002");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(captured).not.toBeNull();
+    expect(captured!.initiation).toBe("user");
+    expect(captured!.contextWindow?.length).toBeGreaterThan(0);
+    expect(captured!.contextWindow?.length).toBeLessThanOrEqual(5);
+  });
+
+  it("never sends context on the automatic path", async () => {
+    const seen: unknown[] = [];
+    const { loop } = makeLoop({
+      translateOnDevice: async (_s, _t, text) => {
+        seen.push(text);
+        return `EN(${text})`;
+      },
+      translateLlm: async () => "never called",
+    });
+
+    loop.start();
+    await settle(loop);
+
+    // translateOnDevice takes a bare string: there is no channel through which
+    // context could reach it even by accident.
+    for (const text of seen) expect(typeof text).toBe("string");
+  });
+
+  it("masks DNT spans before the LLM sees them and restores after", async () => {
+    let sent = "";
+    const { loop } = makeLoop({
+      translateLlm: async (request) => {
+        sent = request.text;
+        return request.text; // echo
+      },
+    });
+
+    loop.start();
+    await settle(loop);
+    clickEscalate("900002");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(sent).not.toContain("<@123>");
+    expect(layerTextFor("900002")).toContain("<@123>");
+  });
+
+  it("caches on the context-assisted tier, so a repeat costs nothing", async () => {
+    const translateLlm = vi.fn(async () => "cached llm result");
+    const cache = new MemoryOnlyCache();
+    const { loop } = makeLoop({ translateLlm, cache });
+
+    loop.start();
+    await settle(loop);
+    clickEscalate("900001");
+    await new Promise((r) => setTimeout(r, 20));
+    clickEscalate("900001");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(translateLlm).toHaveBeenCalledOnce();
+    expect(layerTextFor("900001")).toContain("cached llm result");
+  });
+
+  it("surfaces an LLM failure in the layer rather than swallowing it", async () => {
+    const { loop } = makeLoop({
+      translateLlm: async () => {
+        throw new Error("no API key set");
+      },
+    });
+
+    loop.start();
+    await settle(loop);
+    clickEscalate("900001");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(layerTextFor("900001")).toMatch(/no API key set/);
+  });
+
+  // A first-run user has no language packs at all. Putting an LLM button on
+  // that state would funnel every new user straight to a paid cloud call,
+  // which is the pressure §4.3 exists to remove.
+  it("offers no escalation while a language pack is merely pending", async () => {
+    const { loop } = makeLoop(
+      {
+        translateLlm: async () => "should not be reachable",
+        policy: { knownLanguages: ["en"], cloudEnabled: false, availability: () => "downloadable" },
+      },
+      "downloadable",
+    );
+
+    loop.start();
+    await settle(loop);
+    expect(layerTextFor("900001")).toMatch(/needs a language pack/);
+    expect(clickEscalate("900001")).toBe(false);
+  });
+});

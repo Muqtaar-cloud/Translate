@@ -29,7 +29,13 @@ export type ToBackground =
    * where no other tab can share it.
    */
   | { type: "cache-get"; key: string }
-  | { type: "cache-put"; key: string; text: string; tier: string };
+  | { type: "cache-put"; key: string; text: string; tier: string }
+  /**
+   * The LLM escalation. Carries the whole request so `initiation` and
+   * `contextWindow` cannot be separated in transit — the worker re-checks the
+   * context policy before anything leaves the machine.
+   */
+  | { type: "llm-translate"; request: import("@polyglot/core").TranslationRequest };
 
 export type FromBackground =
   | { type: "settings"; settings: import("./settings.js").Settings }

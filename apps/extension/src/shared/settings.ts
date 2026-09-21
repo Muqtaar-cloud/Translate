@@ -58,3 +58,47 @@ export async function saveApiKey(provider: string, key: string): Promise<void> {
 export function autoFor(settings: Settings, conversationId: string): boolean {
   return settings.perConversation[conversationId]?.auto ?? true;
 }
+
+/**
+ * Sets a per-channel override.
+ *
+ * Settings are keyed by (platform, guild, channel) rather than globally,
+ * because the useful shape is "auto in #general-es, off in #memes". A single
+ * global switch would make the feature all-or-nothing and it would get turned
+ * off once and left off.
+ */
+export async function setConversationAuto(conversationId: string, auto: boolean): Promise<void> {
+  const settings = await loadSettings();
+  await saveSettings({
+    ...settings,
+    perConversation: { ...settings.perConversation, [conversationId]: { auto } },
+  });
+}
+
+/** Removes an override, returning the conversation to the default (on). */
+export async function clearConversationOverride(conversationId: string): Promise<void> {
+  const settings = await loadSettings();
+  const perConversation = { ...settings.perConversation };
+  delete perConversation[conversationId];
+  await saveSettings({ ...settings, perConversation });
+}
+
+/**
+ * Calls back when settings change anywhere — another tab, the popup, the
+ * options page.
+ *
+ * Without this the content script would read settings once at startup and a
+ * toggle would not take effect until reload, which for a per-channel switch is
+ * the same as not working.
+ */
+export function watchSettings(onChange: (settings: Settings) => void): () => void {
+  const listener = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    area: string,
+  ): void => {
+    if (area !== "sync" || !(KEY in changes)) return;
+    onChange({ ...DEFAULT_SETTINGS, ...(changes[KEY]?.newValue as Partial<Settings>) });
+  };
+  chrome.storage.onChanged.addListener(listener);
+  return () => chrome.storage.onChanged.removeListener(listener);
+}

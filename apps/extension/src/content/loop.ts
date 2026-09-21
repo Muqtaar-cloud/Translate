@@ -7,7 +7,9 @@ import {
   type LanguageCode,
   type Route,
   type RoutingPolicy,
+  type TranslationRequest,
 } from "@polyglot/core";
+import { buildEscalation, collectContext } from "./escalate.js";
 import type { ExtractedMessage, PlatformAdapter } from "./adapter.js";
 import { Batcher, mapWithLimit } from "./batch.js";
 import { MemoryOnlyCache, type TranslationCache } from "./cache.js";
@@ -74,6 +76,14 @@ export interface LoopDeps {
   /** Returns null when the pack is not ready; never falls back to cloud. */
   translateOnDevice(source: string, target: string, text: string): Promise<string | null>;
   translateCloud?: (provider: string, source: string, target: string, text: string) => Promise<string>;
+  /**
+   * The LLM escalation. Absent means the layer shows no "translate properly"
+   * button at all — the affordance exists only when the path behind it does.
+   *
+   * Takes the whole request rather than loose arguments so `initiation` and
+   * `contextWindow` travel together and cannot be separated on the way down.
+   */
+  translateLlm?: (request: TranslationRequest) => Promise<string>;
   onNeedsDownload?: (source: string, target: string) => void;
   /**
    * Gating policy, injected rather than assumed. A viewport gate in the
@@ -227,6 +237,9 @@ export class RenderLoop {
     const layer = new TranslationLayer(this.deps.doc, {
       onTranslateRequest: () => void this.forceTranslate(extracted, layer),
       onEnablePack: (source, target) => this.deps.onNeedsDownload?.(source, target),
+      ...(this.deps.translateLlm
+        ? { onEscalate: () => void this.escalate(extracted, layer) }
+        : {}),
     });
 
     point.parent.insertBefore(layer.host, point.before);
@@ -297,7 +310,7 @@ export class RenderLoop {
     if (hit !== null) {
       // Ahead of the batcher on purpose — a hit must not wait out the debounce.
       const { text: restored } = restore(hit, spans);
-      return { kind: "translated", text: restored, source, target };
+      return { kind: "translated", text: restored, source, target, via: "auto" };
     }
 
     try {
@@ -314,9 +327,81 @@ export class RenderLoop {
 
       await this.cache.put(cacheable, provider, raw);
       const { text: restored } = restore(raw, spans);
-      return { kind: "translated", text: restored, source, target };
+      return { kind: "translated", text: restored, source, target, via: "auto" };
     } catch (error) {
       return { kind: "failed", reason: String(error) };
+    }
+  }
+
+  /**
+   * "Translate properly": re-translate this one message with an LLM, using the
+   * preceding few messages as context.
+   *
+   * Everything here is deliberately confined to the user's click. This is the
+   * only path that sends thread context, the only path that reaches an LLM, and
+   * the only path that writes the context-assisted cache tier — which is keyed
+   * on the context too, so it hits only on a genuine repeat of both.
+   */
+  private async escalate(
+    extracted: ExtractedMessage,
+    layer: TranslationLayer,
+  ): Promise<void> {
+    const translateLlm = this.deps.translateLlm;
+    if (!translateLlm || !this.root) return;
+
+    layer.render({ kind: "escalating" });
+
+    const detections = await this.deps.detect(extracted.text);
+    const source = detections[0]?.lang ?? "auto";
+    const target = this.deps.target;
+
+    const context = collectContext(this.deps.adapter, this.root, extracted.id);
+    const { masked, spans } = mask(extracted.text);
+
+    let request: TranslationRequest;
+    try {
+      // Throws if this were ever wired to something automatic. Cheap, and the
+      // drift it catches is exactly the one that would go unnoticed.
+      request = buildEscalation({ text: masked }, source, target, context);
+    } catch (error) {
+      layer.render({ kind: "failed", reason: String(error) });
+      return;
+    }
+
+    // The context is part of the key: the same text under different
+    // surroundings has a different correct translation, so this tier hits only
+    // on a genuine repeat of both.
+    const cacheable = {
+      text: extracted.text,
+      source,
+      target,
+      ...(request.contextWindow ? { contextWindow: request.contextWindow } : {}),
+    };
+
+    const hit = await this.cache.get(cacheable, "llm");
+    if (hit !== null) {
+      layer.render({
+        kind: "translated",
+        text: restore(hit, spans).text,
+        source,
+        target,
+        via: "llm",
+      });
+      return;
+    }
+
+    try {
+      const raw = await translateLlm(request);
+      await this.cache.put(cacheable, "llm", raw);
+      layer.render({
+        kind: "translated",
+        text: restore(raw, spans).text,
+        source,
+        target,
+        via: "llm",
+      });
+    } catch (error) {
+      layer.render({ kind: "failed", reason: String(error) });
     }
   }
 

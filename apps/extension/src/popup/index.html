@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Polyglot</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font: 13px/1.45 system-ui, sans-serif; width: 300px; margin: 0; padding: 14px; }
+      h1 { font-size: 13px; margin: 0 0 2px; letter-spacing: .04em; text-transform: uppercase; opacity: .6; }
+      .channel { font-weight: 600; word-break: break-all; margin-bottom: 10px; }
+      .row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+      .row label { flex: 1; }
+      .muted { opacity: .65; }
+      hr { border: 0; border-top: 1px solid rgba(127,127,127,.3); margin: 14px 0 10px; }
+      .overrides { max-height: 130px; overflow: auto; }
+      .override { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 0; }
+      .override code { flex: 1; word-break: break-all; opacity: .8; }
+      button { font: inherit; cursor: pointer; background: transparent; color: inherit;
+               border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; opacity: .75; }
+      button:hover { opacity: 1; }
+      a { color: inherit; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>This channel</h1>
+    <div class="channel" id="channel">—</div>
+
+    <div class="row" id="toggleRow" hidden>
+      <label for="auto">Translate automatically here</label>
+      <input type="checkbox" id="auto" />
+    </div>
+    <div class="muted" id="state"></div>
+
+    <hr />
+    <h1>Channels you've changed</h1>
+    <div class="overrides" id="overrides"><span class="muted">none</span></div>
+
+    <hr />
+    <a href="#" id="options">All settings →</a>
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>

@@ -19,8 +19,9 @@ translation-quality bake-off, and the harness for it is built:
   blinded rating sheets, Wilson intervals and a coarse verdict.
   ([how to run it](tools/bakeoff/README.md))
 - **`apps/extension`** — Phases 1–2: the Discord adapter, render loop,
-  translation layer, per-pair language-pack UX, viewport gating, batching and a
-  two-level cache. ([how to run it](apps/extension/README.md))
+  translation layer, per-pair language-pack UX, viewport gating, batching, a
+  two-level cache, per-channel settings and the LLM escalation button.
+  ([how to run it](apps/extension/README.md))
 
 The quality gate still hasn't run — it needs real chat data and bilingual
 raters. Phase 1 was built ahead of it by explicit decision; if the gate comes
@@ -28,7 +29,7 @@ back bad, this code is a sunk cost and the plan says so.
 
 ```bash
 npm install
-npm test          # 149 tests
+npm test          # 183 tests
 npm run typecheck
 npm run build:ext # -> apps/extension/dist, load unpacked in Chrome
 npm run smoke     # loads it into real Chromium against a fake Discord page

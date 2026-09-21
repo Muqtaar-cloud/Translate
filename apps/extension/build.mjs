@@ -43,10 +43,16 @@ await Promise.all([
     entryPoints: [resolve(here, "src/options/options.ts")],
     outfile: resolve(out, "options/options.js"),
   }),
+  build({
+    ...common,
+    entryPoints: [resolve(here, "src/popup/popup.ts")],
+    outfile: resolve(out, "popup/popup.js"),
+  }),
 ]);
 
 cpSync(resolve(here, "manifest.json"), resolve(out, "manifest.json"));
 cpSync(resolve(here, "src/options/index.html"), resolve(out, "options/index.html"));
+cpSync(resolve(here, "src/popup/index.html"), resolve(out, "popup/index.html"));
 
 console.log(`built -> ${out}`);
 if (watch) console.log("(watch mode is not wired yet; re-run to rebuild)");
