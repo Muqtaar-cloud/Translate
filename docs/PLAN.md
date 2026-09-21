@@ -68,6 +68,19 @@ a handful of friends, and by the time the B decision comes up a month later ther
 are real numbers from real hardware instead of an inference from a documented
 spec §4.1 already suspects is over-strict. One line in Phase 2 (§9).
 
+**And the pre-install half is built: `tools/preflight`.** A single
+self-contained page that reports browser, API presence and per-pair
+availability, and downloads a pack on a click. It exists because the extension
+fails closed — with no on-device path and no API key, it does nothing at all,
+and 0a found nothing is `available` on a fresh profile, so a friend's first
+sign of an unsupported machine would otherwise be a chat window that never
+translates. It also answers §2 directly: run it on a handful of real machines
+and the qualifying-share question has evidence instead of an inference from a
+documented spec. Because language packs are a browser-level resource rather
+than per-site data, downloading there warms the same packs the extension uses —
+the nearest thing the platform allows to choosing your languages at install
+time, since `create()` needs a user gesture and an install has none.
+
 Note the interaction with §8: "spend the store weeks on the bot instead" is only
 attractive if the bot has economics, which is exactly what §8 now questions.
 **Taken together, §1 and §8 argue for a smaller v1 than either does alone** — the

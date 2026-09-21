@@ -12,7 +12,8 @@
     "typecheck": "tsc --build --force",
     "build:ext": "node apps/extension/build.mjs",
     "smoke": "npm run build:ext && node apps/extension/scripts/smoke.mjs",
-    "probe": "npx tsx tools/bakeoff/src/cli.ts probe"
+    "probe": "npx tsx tools/bakeoff/src/cli.ts probe",
+    "preflight": "node tools/preflight/smoke.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.0",

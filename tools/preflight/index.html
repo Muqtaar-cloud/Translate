@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Polyglot Preflight</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --fg: #1a1a18; --dim: #6b6b66; --rule: #e0e0dc;
+    --card: #ffffff; --ok: #2f6b3d; --warn: #8a6d1f; --bad: #9b3232;
+    --okbg: #eaf4ec; --warnbg: #faf3e0; --badbg: #fbecec; --accent: #1a1a18;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181a; --fg: #ececeb; --dim: #9a9a96; --rule: #2e3033;
+      --card: #1e2023; --ok: #7fc48f; --warn: #d9bc6a; --bad: #e08585;
+      --okbg: #1b2a1f; --warnbg: #2a2517; --badbg: #2c1c1c; --accent: #ececeb;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --fg: #ececeb; --dim: #9a9a96; --rule: #2e3033;
+    --card: #1e2023; --ok: #7fc48f; --warn: #d9bc6a; --bad: #e08585;
+    --okbg: #1b2a1f; --warnbg: #2a2517; --badbg: #2c1c1c; --accent: #ececeb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em;
+       color: var(--dim); margin: 32px 0 10px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--dim); margin-bottom: 28px; }
+  .verdict { border-radius: 10px; padding: 16px 18px; margin: 0 0 8px; border: 1px solid var(--rule); }
+  .verdict strong { display: block; font-size: 1.05rem; margin-bottom: 3px; }
+  .verdict.ok { background: var(--okbg); border-color: var(--ok); }
+  .verdict.warn { background: var(--warnbg); border-color: var(--warn); }
+  .verdict.bad { background: var(--badbg); border-color: var(--bad); }
+  .verdict.idle { background: var(--card); }
+  .card { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 4px 16px; }
+  .row { display: flex; gap: 12px; align-items: center; justify-content: space-between;
+         padding: 11px 0; border-bottom: 1px solid var(--rule); }
+  .row:last-child { border-bottom: 0; }
+  .row .label { min-width: 0; }
+  .row .name { font-weight: 500; }
+  .row .note { color: var(--dim); font-size: 0.85rem; }
+  .state { white-space: nowrap; font-size: 0.85rem; font-weight: 600; }
+  .state.ok { color: var(--ok); } .state.warn { color: var(--warn); }
+  .state.bad { color: var(--bad); } .state.dim { color: var(--dim); font-weight: 500; }
+  button {
+    font: inherit; font-size: 0.87rem; font-weight: 500; cursor: pointer;
+    background: var(--accent); color: var(--bg); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 5px 11px;
+  }
+  button.ghost { background: transparent; color: var(--fg); border-color: var(--rule); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  fieldset { border: 1px solid var(--rule); border-radius: 10px; padding: 12px 16px 16px; margin: 0 0 16px; background: var(--card); }
+  legend { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-weight: 600; padding: 0 6px; }
+  .langs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; }
+  .langs label { display: flex; gap: 6px; align-items: center; font-size: 0.92rem; }
+  input[type="text"] { font: inherit; font-size: 0.92rem; padding: 5px 8px; width: 100%;
+    background: var(--bg); color: var(--fg); border: 1px solid var(--rule); border-radius: 6px; }
+  .inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .inline label { font-size: 0.92rem; color: var(--dim); }
+  .inline input[type="text"] { width: 90px; }
+  .bar { height: 4px; background: var(--rule); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--ok); width: 0; transition: width .2s; }
+  pre { background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+        padding: 14px 16px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; }
+  footer { color: var(--dim); font-size: 0.84rem; margin-top: 36px; border-top: 1px solid var(--rule); padding-top: 16px; }
+  code { font-size: 0.88em; background: var(--rule); padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Polyglot preflight</h1>
+  <p class="lede">
+    Checks whether this browser can translate chat messages on your own machine,
+    before you install anything. Nothing is sent anywhere — every check runs here.
+  </p>
+
+  <div class="verdict idle" id="verdict"><strong>Checking…</strong><span>One moment.</span></div>
+
+  <h2>This browser</h2>
+  <div class="card" id="env"></div>
+
+  <h2>Languages</h2>
+  <fieldset>
+    <legend>What you want</legend>
+    <div class="inline" style="margin-bottom:10px">
+      <label for="target">I read in</label>
+      <input type="text" id="target" value="en" size="4" spellcheck="false" />
+      <span class="note" style="color:var(--dim);font-size:.85rem">language code, e.g. <code>en</code></span>
+    </div>
+    <div>I want to read messages written in:</div>
+    <div class="langs" id="langs"></div>
+    <div style="margin-top:10px">
+      <input type="text" id="extra" placeholder="other codes, comma separated — e.g. sw, ur, vi" spellcheck="false" />
+    </div>
+    <div style="margin-top:12px" class="inline">
+      <button id="check">Check these</button>
+      <button id="downloadAll" class="ghost" disabled>Download all missing packs</button>
+    </div>
+  </fieldset>
+
+  <div class="card" id="pairs"><div class="row"><span class="note">Pick some languages and press Check.</span></div></div>
+
+  <h2>Send this back</h2>
+  <p style="color:var(--dim);font-size:.9rem">
+    No message content, no personal data — just what this machine can do.
+  </p>
+  <pre id="summary">—</pre>
+  <button id="copy" class="ghost">Copy summary</button>
+
+  <footer>
+    Downloading a pack here warms it for the extension too: the packs are a
+    browser-level resource, not per-site data. Worth confirming once —
+    download a pack here, then check the extension's options page.
+  </footer>
+</main>
+
+<script type="module">
+/**
+ * Polyglot preflight.
+ *
+ * The question this answers is narrower than "is my computer good enough".
+ * Chrome's documented requirements (~22 GB free disk, 16 GB RAM, 4+ cores)
+ * gate the language-pack *download*, not the presence of the API — the
+ * project measured the API present on a machine nowhere near those numbers.
+ * So the only honest check is to try: `availability()` tells you a pair is
+ * offered, and a completed download tells you it actually works.
+ *
+ * Everything runs locally. There is no network call in this file other than
+ * the browser's own model download, which is triggered by a click.
+ */
+
+const COMMON = [
+  ["es", "Spanish"], ["pt", "Portuguese"], ["fr", "French"], ["de", "German"],
+  ["it", "Italian"], ["nl", "Dutch"], ["pl", "Polish"], ["ru", "Russian"],
+  ["tr", "Turkish"], ["ar", "Arabic"], ["hi", "Hindi"], ["bn", "Bengali"],
+  ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"], ["vi", "Vietnamese"],
+];
+const PRESELECTED = new Set(["es", "pt", "fr", "de"]);
+
+const $ = (id) => document.getElementById(id);
+const translator = () => globalThis.Translator ?? null;
+const detector = () => globalThis.LanguageDetector ?? null;
+
+/** Chromium-only APIs, so say plainly which browser this is. */
+function describeBrowser() {
+  const d = navigator.userAgentData;
+  const brand = d?.brands?.find((b) => /Chrome|Edge|Chromium/i.test(b.brand) && !/Not/i.test(b.brand));
+  if (brand) return { name: brand.brand, version: brand.version, platform: d.platform ?? "unknown" };
+  const m = /(Edg|Chrome)\/(\d+)/.exec(navigator.userAgent);
+  return {
+    name: m ? (m[1] === "Edg" ? "Microsoft Edge" : "Chrome") : "Not Chrome or Edge",
+    version: m ? m[2] : "—",
+    platform: navigator.platform || "unknown",
+  };
+}
+
+function row(name, note, state, cls) {
+  const el = document.createElement("div");
+  el.className = "row";
+  el.innerHTML =
+    '<div class="label"><div class="name"></div><div class="note"></div></div>' +
+    '<div class="state"></div>';
+  el.querySelector(".name").textContent = name;
+  el.querySelector(".note").textContent = note ?? "";
+  const s = el.querySelector(".state");
+  s.textContent = state;
+  s.classList.add(cls);
+  return el;
+}
+
+const browser = describeBrowser();
+const framed = globalThis.top !== globalThis.self;
+
+function renderEnv() {
+  const env = $("env");
+  env.replaceChildren();
+
+  const chromium = /Chrome|Edge|Chromium/i.test(browser.name);
+  env.append(
+    row(
+      `${browser.name} ${browser.version}`,
+      chromium ? "" : "The on-device translator is a Chromium feature. Firefox and Safari have no equivalent.",
+      chromium ? "supported" : "not supported",
+      chromium ? "ok" : "bad",
+    ),
+  );
+  env.append(row("Platform", browser.platform, "desktop only", "dim"));
+  env.append(
+    row(
+      "Translator API",
+      translator() ? "" : "Not exposed in this browser.",
+      translator() ? "present" : "missing",
+      translator() ? "ok" : "bad",
+    ),
+  );
+  env.append(
+    row(
+      "Language detector",
+      detector() ? "" : "Without it, the extension cannot tell which messages need translating.",
+      detector() ? "present" : "missing",
+      detector() ? "ok" : "bad",
+    ),
+  );
+  if (framed) {
+    env.append(
+      row(
+        "Running in a frame",
+        "A framed page needs an explicit permission policy to reach these APIs, so a 'missing' result here may be the frame's fault. Open this file in its own tab.",
+        "may skew results",
+        "warn",
+      ),
+    );
+  }
+}
+
+function setVerdict(cls, title, detail) {
+  const v = $("verdict");
+  v.className = `verdict ${cls}`;
+  v.replaceChildren();
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const span = document.createElement("span");
+  span.textContent = detail;
+  v.append(strong, span);
+}
+
+function renderLangChoices() {
+  const box = $("langs");
+  for (const [code, name] of COMMON) {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = code;
+    cb.checked = PRESELECTED.has(code);
+    label.append(cb, document.createTextNode(`${name} (${code})`));
+    box.append(label);
+  }
+}
+
+const chosen = () => {
+  const boxes = [...document.querySelectorAll("#langs input:checked")].map((b) => b.value);
+  const extra = $("extra").value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return [...new Set([...boxes, ...extra])];
+};
+
+/** pair key -> { state, el, bar } */
+const results = new Map();
+
+async function checkPairs() {
+  const api = translator();
+  const target = ($("target").value.trim() || "en").toLowerCase();
+  const sources = chosen().filter((s) => s !== target);
+  const box = $("pairs");
+  box.replaceChildren();
+  results.clear();
+
+  if (!api) {
+    box.append(row("Cannot check", "The Translator API is not available in this browser.", "unavailable", "bad"));
+    updateVerdict();
+    return;
+  }
+  if (sources.length === 0) {
+    box.append(row("Nothing selected", "Tick a language, or add codes in the box above.", "—", "dim"));
+    return;
+  }
+
+  for (const source of sources) {
+    const key = `${source}->${target}`;
+    const el = row(key, "checking…", "…", "dim");
+    box.append(el);
+
+    let state;
+    try {
+      state = await api.availability({ sourceLanguage: source, targetLanguage: target });
+    } catch (e) {
+      // An unknown or malformed code throws rather than returning 'unavailable'.
+      state = "unavailable";
+      el.querySelector(".note").textContent = `not offered (${String(e).slice(0, 80)})`;
+    }
+    results.set(key, { source, target, state, el });
+    paint(key);
+  }
+
+  $("downloadAll").disabled = ![...results.values()].some((r) => r.state === "downloadable");
+  updateVerdict();
+}
+
+const WORDING = {
+  available: ["ready", "ok", "Already downloaded — this pair works offline right now."],
+  downloadable: ["needs download", "warn", "Offered, but the pack is not on this machine yet. Download it to be sure."],
+  downloading: ["downloading", "warn", "Already in progress."],
+  unavailable: ["not offered", "bad", "This browser will not translate this pair on-device."],
+};
+
+function paint(key) {
+  const r = results.get(key);
+  if (!r) return;
+  const [label, cls, note] = WORDING[r.state] ?? ["unknown", "dim", ""];
+  const stateEl = r.el.querySelector(".state");
+  stateEl.textContent = label;
+  stateEl.className = `state ${cls}`;
+  r.el.querySelector(".note").textContent = r.note ?? note;
+
+  const existing = r.el.querySelector("button");
+  if (existing) existing.remove();
+  if (r.state === "downloadable") {
+    const b = document.createElement("button");
+    b.textContent = "Download";
+    b.addEventListener("click", () => void downloadPair(key, b));
+    r.el.insertBefore(b, stateEl);
+  }
+}
+
+/**
+ * The definitive check.
+ *
+ * `create()` needs a user gesture when the pack is absent, which is why this
+ * only ever runs from a click and cannot be done automatically on load.
+ */
+async function downloadPair(key, button) {
+  const r = results.get(key);
+  const api = translator();
+  if (!r || !api) return;
+
+  button.disabled = true;
+  button.textContent = "Downloading…";
+  let bar = r.el.querySelector(".bar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "bar";
+    bar.innerHTML = "<i></i>";
+    r.el.querySelector(".label").append(bar);
+  }
+
+  try {
+    const instance = await api.create({
+      sourceLanguage: r.source,
+      targetLanguage: r.target,
+      monitor(m) {
+        m.addEventListener("downloadprogress", (e) => {
+          const pct = e.total ? (e.loaded / e.total) * 100 : (e.loaded ?? 0) * 100;
+          bar.querySelector("i").style.width = `${Math.min(100, Math.round(pct))}%`;
+        });
+      },
+    });
+
+    // Availability can report ready before the pack truly serves, so prove it
+    // with one real translation rather than trusting the state alone.
+    let proof = "";
+    try {
+      proof = await instance.translate("hello");
+    } catch {
+      proof = "";
+    }
+    instance.destroy?.();
+
+    r.state = "available";
+    r.note = proof ? `downloaded and working — "hello" → "${proof}"` : "downloaded";
+    bar.remove();
+  } catch (e) {
+    r.state = "unavailable";
+    r.note = `download failed: ${String(e).slice(0, 140)}`;
+    bar.remove();
+  }
+  paint(key);
+  $("downloadAll").disabled = ![...results.values()].some((x) => x.state === "downloadable");
+  updateVerdict();
+}
+
+async function downloadAll() {
+  $("downloadAll").disabled = true;
+  for (const [key, r] of [...results]) {
+    if (r.state !== "downloadable") continue;
+    const b = r.el.querySelector("button");
+    if (b) await downloadPair(key, b);
+  }
+}
+
+function updateVerdict() {
+  const chromium = /Chrome|Edge|Chromium/i.test(browser.name);
+  if (!chromium || !translator() || !detector()) {
+    setVerdict(
+      "bad",
+      "This browser can't run the free path",
+      framed
+        ? "Open this page in its own tab first — a frame can block the APIs. If it still fails, you need desktop Chrome or Edge."
+        : "Polyglot translates on your own machine using a Chromium feature that isn't here. Desktop Chrome or Edge is required.",
+    );
+    renderSummary();
+    return;
+  }
+  const all = [...results.values()];
+  if (all.length === 0) {
+    setVerdict("ok", "This browser has what it needs", "Now check the languages you actually read.");
+    renderSummary();
+    return;
+  }
+  const ready = all.filter((r) => r.state === "available").length;
+  const pending = all.filter((r) => r.state === "downloadable" || r.state === "downloading").length;
+  const no = all.filter((r) => r.state === "unavailable");
+
+  if (ready > 0 && pending === 0 && no.length === 0) {
+    setVerdict("ok", "Ready to install", `All ${ready} language${ready === 1 ? "" : "s"} downloaded and working. Translation will be free and stay on this machine.`);
+  } else if (ready + pending > 0 && no.length === 0) {
+    setVerdict("warn", "Looks good — finish the downloads", "Every language is offered. Press Download so you find out here, not mid-conversation, whether they actually install.");
+  } else if (ready + pending > 0) {
+    setVerdict("warn", "Partly supported", `${no.length} language${no.length === 1 ? " is" : "s are"} not offered on-device: ${no.map((r) => r.source).join(", ")}. The rest will work for free.`);
+  } else {
+    setVerdict("bad", "No languages available on-device", "The API is here but none of your languages are offered. Translating these would mean a paid cloud service.");
+  }
+  renderSummary();
+}
+
+function renderSummary() {
+  const lines = [
+    "Polyglot preflight",
+    `when      ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+    `browser   ${browser.name} ${browser.version}`,
+    `platform  ${browser.platform}`,
+    `framed    ${framed ? "yes (may skew results)" : "no"}`,
+    `translator ${translator() ? "present" : "MISSING"}`,
+    `detector   ${detector() ? "present" : "MISSING"}`,
+  ];
+  if (results.size > 0) {
+    lines.push("pairs");
+    for (const [key, r] of results) lines.push(`  ${key.padEnd(12)} ${r.state}${r.note ? `  (${r.note})` : ""}`);
+  }
+  $("summary").textContent = lines.join("\n");
+}
+
+$("check").addEventListener("click", () => void checkPairs());
+$("downloadAll").addEventListener("click", () => void downloadAll());
+$("copy").addEventListener("click", () => {
+  void navigator.clipboard.writeText($("summary").textContent ?? "").then(
+    () => { $("copy").textContent = "Copied"; setTimeout(() => ($("copy").textContent = "Copy summary"), 1500); },
+    () => { $("copy").textContent = "Select and copy manually"; },
+  );
+});
+
+renderEnv();
+renderLangChoices();
+updateVerdict();
+</script>
+</body>
+</html>
