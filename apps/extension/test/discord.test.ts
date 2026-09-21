@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 import { fixture } from "./fixture.js";
+import { SPOILER_MARK } from "@polyglot/core";
 import {
   conversationIdFrom,
   DiscordAdapter,
@@ -55,7 +56,7 @@ describe("findMessages", () => {
   it("finds the scroll container and every message in it", () => {
     const root = adapter.observeRoot(document);
     expect(root).not.toBeNull();
-    expect(adapter.findMessages(root!)).toHaveLength(6);
+    expect(adapter.findMessages(root!)).toHaveLength(8);
   });
 
   it("returns null root when the page is not a chat view", () => {
@@ -102,6 +103,55 @@ describe("extract", () => {
     expect(adapter.extract(el)?.text).toBe("¿vienes mañana a la fiesta?");
   });
 
+  // Discord hides spoiler text behind a click but leaves it in the DOM. A
+  // layer that prints it underneath is a leak to anyone watching the screen.
+  describe("spoilers", () => {
+    it("never carries unrevealed spoiler text into the extraction", () => {
+      const m = adapter.extract(byId("900007"));
+      expect(m?.text).not.toContain("que todo era un sueño");
+      expect(m?.text).toContain(SPOILER_MARK);
+    });
+
+    it("keeps the sentence readable around the redaction", () => {
+      expect(adapter.extract(byId("900007"))?.text).toContain(`el final es ${SPOILER_MARK}`);
+    });
+
+    it("translates a spoiler the user has opened", () => {
+      byId("900007").querySelector("[role=button]")!.setAttribute("aria-expanded", "true");
+      const m = adapter.extract(byId("900007"));
+      expect(m?.text).toContain("que todo era un sueño");
+      expect(m?.text).not.toContain(SPOILER_MARK);
+    });
+
+    // The reveal has to change the extracted text, or the node key
+    // (messageId, hash(text)) stays put and the layer never re-translates.
+    it("changes the extracted text when a spoiler is revealed", () => {
+      const before = adapter.extract(byId("900007"))?.text;
+      byId("900007").querySelector("[role=button]")!.setAttribute("aria-expanded", "true");
+      expect(adapter.extract(byId("900007"))?.text).not.toBe(before);
+    });
+  });
+
+  // textContent inserts nothing at <br> or a block boundary, so without this
+  // the engine is handed "primera líneasegunda línea".
+  describe("line structure", () => {
+    it("turns <br> into a newline", () => {
+      expect(adapter.extract(byId("900007"))?.text.split("\n")).toEqual([
+        "no me lo esperaba",
+        `el final es ${SPOILER_MARK}`,
+        "en serio",
+      ]);
+    });
+
+    it("separates lines that are block elements", () => {
+      expect(adapter.extract(byId("900008"))?.text).toBe("primera línea\nsegunda línea");
+    });
+
+    it("does not introduce breaks inside a single-line message", () => {
+      expect(adapter.extract(byId("900002"))?.text).not.toContain("\n");
+    });
+  });
+
   it("returns null for a message with no readable body", () => {
     const el = byId("900001");
     el.querySelector("[id^=message-content-]")!.remove();
@@ -131,8 +181,8 @@ describe("selfCheck", () => {
   it("is healthy on a normal page", () => {
     const health = adapter.selfCheck(document);
     expect(health.ok).toBe(true);
-    expect(health.messagesFound).toBe(6);
-    expect(health.extractableFound).toBe(6);
+    expect(health.messagesFound).toBe(8);
+    expect(health.extractableFound).toBe(8);
   });
 
   it("reports a missing message list", () => {
@@ -152,7 +202,7 @@ describe("selfCheck", () => {
     const health = adapter.selfCheck(document);
     expect(health.ok).toBe(false);
     expect(health.rootFound).toBe(true);
-    expect(health.messagesFound).toBe(6);
+    expect(health.messagesFound).toBe(8);
     expect(health.extractableFound).toBe(0);
   });
 

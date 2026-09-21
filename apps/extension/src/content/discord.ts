@@ -1,3 +1,4 @@
+import { SPOILER_MARK } from "@polyglot/core";
 import type { AdapterHealth, ExtractedMessage, PlatformAdapter } from "./adapter.js";
 
 /**
@@ -22,6 +23,15 @@ const SEL = {
   accessories: '[id^="message-accessories-"]',
   /** The inline quoted message on a reply. Inherits the quoted message's layer. */
   replyContext: '[id^="message-reply-context-"]',
+  /**
+   * A spoiler. ARIA first, as everywhere else in this table; the class
+   * substring is a deliberate exception to the no-styling-classes rule,
+   * because missing a spoiler prints hidden text in the clear rather than
+   * breaking something cosmetic. Matching both means a rename of either
+   * does not leak. Whether a given match is *revealed* is decided in
+   * `extract`, not here.
+   */
+  spoilers: '[role="button"][aria-expanded], [class*="spoiler" i]',
   /** Author name, when the row carries one (grouped messages often don't). */
   username: '[id^="message-username-"]',
   /**
@@ -34,6 +44,57 @@ const SEL = {
     'form div[role="textbox"]',
   ],
 } as const;
+
+/**
+ * Elements that imply a line break around their contents.
+ *
+ * A tag list rather than computed styles: extraction runs against detached
+ * clones and inside happy-dom, where layout does not exist.
+ */
+const BLOCK_TAGS: ReadonlySet<string> = new Set([
+  "DIV", "P", "LI", "UL", "OL", "BLOCKQUOTE", "PRE", "HR", "TABLE", "TR",
+  "H1", "H2", "H3", "H4", "H5", "H6",
+]);
+
+/**
+ * Text with line structure preserved.
+ *
+ * `textContent` concatenates text nodes and inserts nothing at `<br>` or at a
+ * block boundary, so a two-line message arrives as one run with its lines
+ * jammed together — "holaadios" — corrupting the engine's input before any
+ * translation happens. Shift+Enter is ordinary in chat, so this is the normal
+ * case rather than an edge one.
+ */
+export function textOf(node: Node): string {
+  let out = "";
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === child.TEXT_NODE) {
+      out += child.nodeValue ?? "";
+      continue;
+    }
+    if (child.nodeType !== child.ELEMENT_NODE) continue;
+
+    const el = child as HTMLElement;
+    if (el.tagName === "BR") {
+      out += "\n";
+      continue;
+    }
+
+    const inner = textOf(el);
+    if (!BLOCK_TAGS.has(el.tagName)) {
+      out += inner;
+      continue;
+    }
+    if (out !== "" && !out.endsWith("\n")) out += "\n";
+    out += inner;
+    if (!out.endsWith("\n")) out += "\n";
+  }
+  return out;
+}
+
+/** Trailing spaces and runs of blank lines go; deliberate breaks stay. */
+const normalizeLines = (s: string): string =>
+  s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 
 /** `chat-messages-<channelId>-<messageId>` -> the message id. */
 export function messageIdFrom(domId: string): string | null {
@@ -91,7 +152,18 @@ export class DiscordAdapter implements PlatformAdapter {
     // Our own layer must never become part of the next extraction.
     clone.querySelectorAll("polyglot-layer").forEach((n) => n.remove());
 
-    const text = (clone.textContent ?? "").trim();
+    // Unrevealed spoilers are replaced, not removed: dropping them would leave
+    // "el final es" and read as a broken sentence, while keeping them would
+    // print in the layer what Discord is deliberately hiding above it. A
+    // spoiler the user has already opened is theirs to read, so it translates
+    // normally — and because the revealed text changes the node key, the
+    // reveal re-translates the message on its own.
+    clone.querySelectorAll(SEL.spoilers).forEach((n) => {
+      if (n.closest('[aria-expanded="true"]')) return;
+      n.replaceWith(clone.ownerDocument.createTextNode(SPOILER_MARK));
+    });
+
+    const text = normalizeLines(textOf(clone));
     if (text === "") return null;
 
     const author = el.querySelector<HTMLElement>(SEL.username)?.textContent?.trim();

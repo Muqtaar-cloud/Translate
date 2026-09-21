@@ -157,7 +157,18 @@ export class RenderLoop {
     this.observer = new MutationObserver(() => {
       void this.sync();
     });
-    this.observer.observe(this.root, { childList: true, subtree: true, characterData: true });
+    // `aria-expanded` is watched so that revealing a spoiler re-translates the
+    // message: the reveal changes the extracted text, which changes the node key
+    // (messageId, hash(text)), so the existing lifecycle handles it for free.
+    // Filtered to that one attribute — watching `class` across a Discord subtree
+    // would fire on every hover.
+    this.observer.observe(this.root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["aria-expanded"],
+    });
 
     void this.sync();
     return true;

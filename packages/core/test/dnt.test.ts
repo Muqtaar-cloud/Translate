@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mask, restore, survivalRate } from "../src/dnt.js";
+import { mask, restore, survivalRate, SPOILER_MARK } from "../src/dnt.js";
 
 describe("DNT masking (§3, §12)", () => {
   it("masks and restores a Discord-flavoured message unchanged", () => {
@@ -90,5 +90,31 @@ describe("glossary protection", () => {
     expect(masked).not.toContain("Polyglot");
     expect(masked).not.toContain("<@1>");
     expect(restore(masked, spans).text).toBe(text);
+  });
+});
+
+// The adapter substitutes SPOILER_MARK for hidden text. If an engine translates
+// or drops it, the redaction turns into a word or vanishes, and the layer stops
+// showing that something was withheld.
+describe("spoiler mark", () => {
+  it("is masked like any other do-not-translate span", () => {
+    const text = `el final es ${SPOILER_MARK}`;
+    const { masked, spans } = mask(text);
+    expect(masked).not.toContain(SPOILER_MARK);
+    expect(spans).toContain(SPOILER_MARK);
+    expect(restore(masked, spans).text).toBe(text);
+  });
+
+  it("survives an engine that reorders the sentence", () => {
+    const { masked, spans } = mask(`el final es ${SPOILER_MARK}`);
+    const asIfTranslated = masked.replace("el final es ", "the ending is ");
+    const out = restore(asIfTranslated, spans);
+    expect(out.text).toBe(`the ending is ${SPOILER_MARK}`);
+    expect(out.missing).toEqual([]);
+  });
+
+  it("is reported missing when an engine eats it", () => {
+    const { spans } = mask(`el final es ${SPOILER_MARK}`);
+    expect(restore("the ending is", spans).missing).toEqual([0]);
   });
 });

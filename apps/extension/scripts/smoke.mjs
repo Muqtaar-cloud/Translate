@@ -21,10 +21,11 @@ const extensionPath = resolve(here, "../dist");
 const fixture = readFileSync(resolve(here, "../fixtures/discord-messages.html"), "utf8");
 
 /**
- * A tall channel: the six fixture messages plus enough filler that most of the
+ * A tall channel: the eight fixture messages plus enough filler that most of the
  * list starts well below the fold. Viewport gating is only observable against
  * real layout, which is exactly what the happy-dom tests cannot provide.
  */
+const FIXTURE_MESSAGES = 8;
 const FILLER = 60;
 const filler = Array.from({ length: FILLER }, (_, i) => {
   const id = 950000 + i;
@@ -77,11 +78,23 @@ if (!worker) {
 // Playwright's worker evaluation world does not expose chrome.runtime, so the
 // worker reports its own readiness instead: the flag is set at the very end of
 // the module body, and only gets set if nothing threw on the way there.
-const workerAlive = worker
-  ? await worker
+// Polled rather than read once: the serviceworker event fires when the worker
+// registers, which is before its module body has finished running, so a single
+// evaluate races startup and reports a healthy worker as dead.
+const workerAlive = worker ? await waitForWorkerReady(worker) : false;
+
+async function waitForWorkerReady(w, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = false;
+  while (Date.now() < deadline) {
+    last = await w
       .evaluate(() => globalThis.__polyglotReady === true)
-      .catch((e) => `evaluate failed: ${String(e)}`)
-  : false;
+      .catch((e) => `evaluate failed: ${String(e)}`);
+    if (last === true) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return last;
+}
 
 const page = await context.newPage();
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
@@ -221,7 +234,7 @@ console.log(
 );
 
 const ok =
-  report.messagesRendered === 6 + FILLER &&
+  report.messagesRendered === FIXTURE_MESSAGES + FILLER &&
   gatingWorks &&
   report.workerAlive === true &&
   popup.opened &&

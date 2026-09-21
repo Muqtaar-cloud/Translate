@@ -8,6 +8,15 @@ import { MemoryOnlyCache } from "../src/content/cache.js";
 
 const FIXTURE = fixture("discord-messages.html");
 
+/**
+ * How many messages the fixture holds. Derived rather than written down: these
+ * tests assert that the loop watches *everything* in the list, not that the
+ * fixture is a particular size, and hard-coding the number means adding a
+ * fixture case fails tests that have nothing to do with it.
+ */
+const messagesInFixture = (): number =>
+  document.querySelectorAll('li[id^="chat-messages-"]').length;
+
 const SPANISH = /[¿ñáéíóú]|jajaja|ya voy|vienes|perfecto|mirad/i;
 
 const fakeDetect = async (text: string): Promise<Detection[]> =>
@@ -306,7 +315,7 @@ describe("Phase 2: gating, caching, batching in the loop", () => {
 
     expect(translateOnDevice).not.toHaveBeenCalled();
     expect(layersIn()).toHaveLength(0);
-    expect(loop.watchedCount).toBe(6);
+    expect(loop.watchedCount).toBe(messagesInFixture());
   });
 
   it("translates only what the gate releases", async () => {
@@ -342,13 +351,14 @@ describe("Phase 2: gating, caching, batching in the loop", () => {
 
     loop.start();
     await settle(loop);
-    expect(gate.size).toBe(6);
+    expect(gate.size).toBe(messagesInFixture());
 
     document.querySelector('li[id$="-900001"]')!.remove();
     await settle(loop);
 
-    expect(gate.size).toBe(5);
-    expect(loop.watchedCount).toBe(5);
+    // Evaluated after the removal: the gate watches exactly what is in the list.
+    expect(gate.size).toBe(messagesInFixture());
+    expect(loop.watchedCount).toBe(messagesInFixture());
   });
 
   it("re-gates a message edited while it was still off-screen", async () => {

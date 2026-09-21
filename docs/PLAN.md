@@ -259,6 +259,29 @@ path that is not available there.
 - **Quoted replies** masked as DNT, inheriting the quoted message's own layer.
   **Embeds, link previews, poll options and thread titles are explicitly not
   translated in v1** — decided here rather than discovered in Phase 1.
+- **Spoilers are redacted, not read.** Discord hides spoiler text behind a
+  click but leaves it in the DOM, so a `textContent` extraction reads it and
+  the layer prints it in the clear underneath the still-hidden original —
+  visible to anyone looking at the screen or on a screenshare. Unrevealed
+  spoiler content is replaced with `SPOILER_MARK` (`▮▮▮`), which is a
+  do-not-translate span like any other, so the sentence stays readable
+  (*"el final es ▮▮▮"*) without leaking. A spoiler the user has opened is
+  theirs to read and translates normally; because the revealed text changes
+  the node key, opening one re-translates the message with no extra machinery.
+  The selector is the one deliberate exception to the no-styling-classes rule
+  (ARIA plus a `[class*="spoiler"]` fallback) — missing a spoiler leaks rather
+  than breaking something cosmetic, so it is worth matching twice.
+- **Line structure is preserved.** `textContent` inserts nothing at `<br>` or
+  a block boundary, so a two-line message reaches the engine as
+  `"primera líneasegunda línea"` — corrupted before translation begins.
+  Extraction walks the tree emitting newlines, and the layer renders
+  `white-space: pre-wrap`. Shift+Enter is ordinary in chat, so this was the
+  normal case being handled as an edge one.
+- **Markdown formatting is flattened, deliberately.** Bold, italic,
+  strikethrough, headers and blockquotes do not survive extraction. Rebuilding
+  markup around translated text is an alignment problem worth real effort, and
+  the original directly above already carries its own formatting. Stated here
+  so it is a decision rather than an artefact of `textContent`.
 
 ### 4.7 Rendering correctness
 `dir="auto"` plus `unicode-bidi: isolate` on every injected node; `lang` set

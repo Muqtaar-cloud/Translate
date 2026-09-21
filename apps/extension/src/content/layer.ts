@@ -66,7 +66,9 @@ const STYLE = `
   margin-right: 6px;
   white-space: nowrap;
 }
-.text { unicode-bidi: isolate; }
+/* pre-wrap, because a multi-line message translates to multi-line text and
+   would otherwise collapse onto one line. */
+.text { unicode-bidi: isolate; white-space: pre-wrap; }
 .muted { opacity: 0.65; font-style: italic; }
 button {
   font: inherit;

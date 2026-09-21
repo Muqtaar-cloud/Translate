@@ -40,11 +40,26 @@ export interface RestoreResult {
 const defaultPlaceholder = (i: number): string => `\u27E6${i}\u27E7`;
 
 /**
+ * What replaces the contents of an unrevealed spoiler during extraction.
+ *
+ * Discord hides spoiler text behind a click, but the text is present in the
+ * DOM, so a naive extraction reads it and the translation layer prints it in
+ * the clear underneath the still-hidden original — readable by anyone looking
+ * at the screen or on a screenshare. The adapter substitutes this mark; the
+ * pattern below stops an engine translating or dropping it.
+ *
+ * Non-alphabetic on purpose. A marker like "[spoiler]" is a word, and an
+ * engine will cheerfully translate it.
+ */
+export const SPOILER_MARK = "\u25AE\u25AE\u25AE";
+
+/**
  * Ordered: earlier patterns win. Fenced code before inline code before the
  * angle-bracket entities it might otherwise contain; URLs before bare handles,
  * since a URL can hold a `#fragment` that looks like a channel reference.
  */
 const PATTERNS: readonly RegExp[] = [
+  /\u25AE+/g, // SPOILER_MARK, substituted by the adapter — first, it is ours
   /```[\s\S]*?```/g, // fenced code
   /`[^`\n]+`/g, // inline code
   /<a?:[A-Za-z0-9_]+:\d+>/g, // custom emoji <:name:id> / <a:name:id>
