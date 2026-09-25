@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch cancels the first: the only run worth
+# finishing is the one for the code that is actually there now.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Fast gate. Runs first and on its own, because it catches nearly everything
+  # and does not need a browser.
+  check:
+    name: typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # node:sqlite (apps/bot) needs 22.5+, and there is no driver fallback.
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        # Composite project build: --force because the incremental state is not
+        # cached between runs and a stale tsbuildinfo would skip real work.
+        run: npx tsc --build --force
+
+      - name: Tests
+        run: npm test
+
+  # Slower, and the only job that exercises the built bundle in a real browser.
+  # Split out so a broken unit test does not wait on a Chromium download.
+  browser:
+    name: build and browser smoke
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium
+        # The full browser, not the headless shell: MV3 extensions will not load
+        # into the shell, so `--with-deps chromium` is the minimum that works.
+        run: npx playwright install --with-deps chromium
+
+      - name: Build extension
+        run: npm run build:ext
+
+      - name: Check the bundle actually has the files the manifest names
+        run: |
+          set -e
+          for f in manifest.json background.js content.js options/index.html \
+                   options/options.js popup/index.html popup/popup.js; do
+            test -s "apps/extension/dist/$f" || { echo "missing or empty: $f"; exit 1; }
+          done
+          echo "bundle contents ok"
+
+      - name: Browser smoke
+        # Asserts what the unit suite structurally cannot: that the service
+        # worker finishes loading, that viewport gating suppresses work against
+        # real layout, that the popup runs clean, and that the outbound composer
+        # leaves the message box untouched until approved.
+        run: npm run smoke

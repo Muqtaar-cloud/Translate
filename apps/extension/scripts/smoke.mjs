@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -45,13 +45,48 @@ const page_html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><t
 <form><div data-slate-editor="true" contenteditable="true">are you coming tomorrow?</div></form>
 </body></html>`;
 
-// Extensions need the full Chromium binary, not the headless shell, and they
-// only load in headed or new-headless mode.
-const executablePath =
-  process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+/**
+ * Finds a full Chromium.
+ *
+ * Extensions need the complete browser, not the headless shell Playwright
+ * downloads by default, and they only load in headed or new-headless mode.
+ *
+ * Resolved rather than hardcoded: the previous version pinned a sandbox path
+ * with a version number in it, which would have broken on any image bump and
+ * did not exist in CI at all. Order: an explicit override, then whatever the
+ * sandbox has, then Playwright's own install.
+ */
+function resolveBrowser() {
+  const override = process.env.CHROMIUM_PATH;
+  if (override) {
+    if (!existsSync(override)) {
+      throw new Error(`CHROMIUM_PATH is set to ${override} but nothing is there`);
+    }
+    return { executablePath: override };
+  }
+
+  const pool = "/opt/pw-browsers";
+  if (existsSync(pool)) {
+    const candidate = readdirSync(pool)
+      .filter((d) => /^chromium-\d+$/.test(d))
+      .sort()
+      .reverse()
+      .map((d) => resolve(pool, d, "chrome-linux/chrome"))
+      .find((p) => existsSync(p));
+    if (candidate) return { executablePath: candidate };
+  }
+
+  // Playwright's own full Chromium, from `playwright install chromium`.
+  return { channel: "chromium" };
+}
+
+const browser = resolveBrowser();
+console.log(
+  `browser: ${browser.executablePath ?? "playwright channel=chromium"}\n`,
+);
 
 const context = await chromium.launchPersistentContext("", {
-  executablePath,
+  ...browser,
   headless: false,
   args: [
     "--headless=new",

@@ -1,5 +1,7 @@
 # Polyglot
 
+[![CI](https://github.com/Muqtaar-cloud/Translate/actions/workflows/ci.yml/badge.svg)](https://github.com/Muqtaar-cloud/Translate/actions/workflows/ci.yml)
+
 In-place translation for multilingual group chats — read Discord in your
 language without leaving the conversation.
 
@@ -37,6 +39,10 @@ npm run typecheck
 npm run build:ext # -> apps/extension/dist, load unpacked in Chrome
 npm run smoke     # loads it into real Chromium against a fake Discord page
 ```
+
+CI runs the typecheck and unit suite on every push and pull request, then
+builds the extension and runs the browser smoke test. Requires Node 22.5+ —
+`apps/bot` uses `node:sqlite`, which has no driver fallback.
 
 ## What still needs a human
 
