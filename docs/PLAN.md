@@ -391,6 +391,29 @@ masking code (`@polyglot/core`) over the corpus and measures placeholder
 survival separately from translation quality. The rubric rates **meaning and
 register only**; DNT is a mechanical pass/fail counted by the harness.
 
+**Collecting the corpus is a command, not an afternoon** — `bakeoff collect`
+(`tools/bakeoff/src/collect.ts`). Every source is a file the platform's own
+client produced: Telegram Desktop's JSON export, or a Discord channel page saved
+from the browser. Nothing automates an account, which §7 rules out and which
+also rules out DiscordChatExporter, the tool a search for this turns up first.
+
+The collector redacts before writing, and substitutes into the same *shape* a
+real URL or mention had, so the DNT survival number above is measured against
+text with the same span count as real chat. Authors are discarded at the parse
+boundary rather than stripped later. Output is refused unless git ignores the
+path.
+
+**Measured 2026-09-25, on the first real run.** The corpus collector found a
+detector bug that the bot's own 13 tests did not: `está` was listed as a Spanish
+stopword and not a Portuguese one, so plainly Portuguese text ("alguém pode
+trazer gelo por favor está quente") scored es=2, pt=1 and was labelled Spanish —
+confidently enough to pass the threshold and enter the corpus. **A mislabelled
+corpus message is worse than a missing one**, because engines are told the source
+language and then answer for obeying a wrong label. Shared words now appear in
+both lists so the tie rule decides, and this pair's honest answer is to decline.
+That is why an unlabelled message goes to a review file with a blank `source`
+that `parseCorpus` rejects, rather than being dropped or guessed at.
+
 Also counted in this phase, free: **code-switching frequency** (§4.5) and
 **self-hosted MT quality** (§8).
 

@@ -11,7 +11,12 @@ so the rating has to come from somewhere honest.
 
 ```bash
 # Phase 0a — what this machine can actually do (PLAN.md §4.1, §4.2)
-npx tsx tools/bakeoff/src/cli.ts probe "es->en,pt->en"
+npm run probe                     # or: ... cli.ts probe "es->en,pt->en"
+
+# Build the corpus from an export the platform's own client produced
+npm run collect telegram ~/Downloads/Telegram/result.json
+npm run collect discord-html ~/saved-channel.html
+LANGUAGES=es,pt PER_LANGUAGE=100 npm run collect telegram result.json
 
 # Validate the pipeline before spending money or a rater's afternoon
 npx tsx tools/bakeoff/src/cli.ts run corpus.jsonl echo
@@ -35,11 +40,44 @@ JSONL, one message per line — see `fixtures/corpus.example.jsonl` for the shap
 {"id":"m1","source":"es","text":"ya voy","context":["¿dónde estás?"]}
 ```
 
-Real corpora go in `tools/bakeoff/data/`, which is gitignored. **These are other
-people's messages** (PLAN.md §5.2): collect from a channel you would be
-comfortable exporting, strip authors, and don't treat the corpus as exempt from
-§5 for being "just a test". The benchmark is the first instance of the problem
-§5 is about.
+`collect` builds this from a file the platform's own client produced. **No
+account is automated and no platform API is called** — §7 is explicit that
+reading the DOM in my own browser is ordinary behaviour while driving an account
+is not, and Discord bans self-bots. So the sources are:
+
+| Source | Where the file comes from |
+|---|---|
+| `telegram` | Telegram Desktop → Settings → Advanced → Export, or one chat's "Export chat history", format **JSON** |
+| `discord-html` | a channel page saved from your own browser (Ctrl+S) after scrolling back as far as you want |
+| `text` | one message per line, pasted by hand |
+
+**DiscordChatExporter is not supported on purpose.** It is the first thing a
+search turns up and it drives your own account token against Discord's API,
+which is exactly what §7 says not to do.
+
+### What `collect` does with the messages
+
+- **Authors never enter the pipeline.** The parsers discard identity at the
+  boundary — there is no author field to forget to strip later.
+- **Redaction runs before anything is written**, and substitutes *into the same
+  shape*: a real URL becomes a fake URL, a mention becomes a mention. That keeps
+  the DNT span count identical to real chat, so the placeholder-survival number
+  is measured on text that still resembles its input.
+- Substitutions are numbered within a message, never stable across the corpus —
+  stable pseudonyms would let a holder reconstruct who said what to whom.
+- **A message it cannot confidently label goes to a review file, not the
+  corpus and not the bin.** Dropping biases the corpus towards long well-formed
+  text, which MT already handles well, making the gate easier than the product.
+  A guessed label is worse: engines are *told* the source language, so a wrong
+  label makes the engine answer for obeying it. Messages under 15 characters are
+  dropped and counted, because no label for them would be honest.
+- Output must be in a git-ignored path, **enforced** rather than documented: a
+  corpus reaches a public repository via `git add -A`, not via a decision.
+
+What it cannot do: names in prose. "ana, vienes?" is a person's name in a message
+body and no mechanical pass finds that reliably. Read the corpus before it goes
+anywhere, treat "don't share it" as the default, and delete it once 0b is
+decided.
 
 ## What the harness does and does not decide
 

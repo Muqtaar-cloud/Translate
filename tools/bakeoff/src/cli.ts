@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  assertIgnored,
+  collect,
+  formatCollectionReport,
+  formatCorpus,
+  parseDiscordHtml,
+  parseTelegramExport,
+  parseTextLines,
+  type RawMessage,
+} from "./collect.js";
 import { loadCorpus, summarise } from "./corpus.js";
 import { AnthropicEngine } from "./engines/anthropic.js";
 import { DeepLEngine } from "./engines/deepl.js";
@@ -168,8 +178,102 @@ async function cmdScore(): Promise<void> {
   console.log(formatReport(scores));
 }
 
+
+/**
+ * Phase 0b input. `collect <source> <file...>` — see collect.ts for why every
+ * source is a file the platform's own client produced rather than an API call.
+ */
+async function cmdCollect(): Promise<void> {
+  const kind = process.argv[3];
+  const files = process.argv.slice(4);
+  if (!kind || files.length === 0) {
+    throw new Error(
+      "usage: bakeoff collect <telegram|discord-html|text> <file...>\n\n" +
+        "  telegram      result.json from the official Telegram Desktop export\n" +
+        "  discord-html  a channel page saved from your own browser (Ctrl+S)\n" +
+        "  text          one message per line\n\n" +
+        "Env: PER_LANGUAGE (default 100), LANGUAGES (es,pt), SEED, MIN_CONFIDENCE\n\n" +
+        "No account is automated and no platform API is called (PLAN.md §7).",
+    );
+  }
+
+  const raws: RawMessage[] = [];
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    if (kind === "telegram") raws.push(...reordinal(parseTelegramExport(text), raws.length));
+    else if (kind === "text") raws.push(...reordinal(parseTextLines(text), raws.length));
+    else if (kind === "discord-html") {
+      // happy-dom rather than a regex: the adapter's contract is expressed as
+      // selectors, and re-expressing it as string matching is how the two
+      // drift apart. Imported lazily so `probe` and `score` do not need it.
+      const { Window } = await import("happy-dom");
+      const window = new Window();
+      raws.push(
+        ...reordinal(
+          parseDiscordHtml(text, window.document as unknown as Document),
+          raws.length,
+        ),
+      );
+    } else throw new Error(`unknown source "${kind}"`);
+  }
+
+  const languages = (process.env["LANGUAGES"] ?? "")
+    .split(",")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const result = await collect(raws, {
+    perLanguage: Number(process.env["PER_LANGUAGE"] ?? 100),
+    seed: Number(process.env["SEED"] ?? 1),
+    minConfidence: Number(process.env["MIN_CONFIDENCE"] ?? 0.6),
+    ...(languages.length > 0 ? { languages } : {}),
+  });
+
+  mkdirSync(OUT, { recursive: true });
+  const corpusPath = join(OUT, "corpus.jsonl");
+  const reviewPath = join(OUT, "corpus-needs-review.jsonl");
+
+  // Before writing, not after. See collect.ts — this is the control, not a note.
+  assertIgnored(corpusPath);
+  assertIgnored(reviewPath);
+
+  writeFileSync(corpusPath, formatCorpus(result.corpus, result.report, kind));
+  if (result.review.length > 0) {
+    writeFileSync(
+      reviewPath,
+      `// ${result.review.length} messages whose language could not be confidently detected.\n` +
+        "// Fix the \"source\" field where it is wrong, delete what is unusable, then append\n" +
+        "// the lines to corpus.jsonl. A guessed label measures the wrong thing: the engine\n" +
+        "// is told the source language, so a mislabelled message blames it for obeying.\n" +
+        result.review.map((m) => JSON.stringify(m)).join("\n") +
+        "\n",
+    );
+  }
+
+  console.log(formatCollectionReport(result.report));
+  console.log(`\n  wrote ${corpusPath} (${result.corpus.length} messages)`);
+  if (result.review.length > 0) console.log(`        ${reviewPath} (${result.review.length} to check)`);
+  console.log(
+    "\n  This file is other people's private messages. It is git-ignored, it should\n" +
+      "  not be shared, and it should be deleted once 0b is decided (PLAN.md §5.2).",
+  );
+}
+
+/**
+ * Renumbers a file's messages so ordinals stay unique across several files.
+ *
+ * Without this, two exports both starting at 0 would interleave and a context
+ * window could be built from a different conversation than the message it is
+ * attached to — which would be invisible in the output and would quietly
+ * corrupt the context-assisted tier.
+ */
+function reordinal(messages: readonly RawMessage[], offset: number): RawMessage[] {
+  return messages.map((m, i) => ({ text: m.text, ordinal: offset + i }));
+}
+
 const commands: Record<string, () => Promise<void>> = {
   probe: cmdProbe,
+  collect: cmdCollect,
   run: cmdRun,
   score: cmdScore,
 };
@@ -179,8 +283,9 @@ const handler = command ? commands[command] : undefined;
 
 if (!handler) {
   console.error(
-    "usage: bakeoff <probe|run|score>\n\n" +
+    "usage: bakeoff <probe|collect|run|score>\n\n" +
       "  probe [pairs]                     Phase 0a: what this machine can actually do\n" +
+      "  collect <source> <file...>        build the 0b corpus from a client export\n" +
       "  run <corpus.jsonl> [engines]      translate + build a blinded rating sheet\n" +
       "  score [sheet] [key]               Wilson intervals and the coarse verdict\n",
   );

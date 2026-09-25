@@ -3,10 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "bakeoff": "./src/cli.ts" },
+  "bin": {
+    "bakeoff": "./src/cli.ts"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
     "@polyglot/core": "*",
+    "happy-dom": "^20.14.5",
     "playwright": "^1.48.0"
   }
 }
