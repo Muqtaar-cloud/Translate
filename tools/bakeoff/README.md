@@ -24,8 +24,8 @@ npx tsx tools/bakeoff/src/cli.ts run corpus.jsonl echo
 # The real run
 npx tsx tools/bakeoff/src/cli.ts run corpus.jsonl ondevice,deepl,llm,selfhosted
 
-# After raters fill in the sheet
-npx tsx tools/bakeoff/src/cli.ts score tools/bakeoff/data/rating-sheet-filled.csv
+# After raters fill in their sheets (one per language, one rater each)
+npx tsx tools/bakeoff/src/cli.ts score filled.es.csv filled.pt.csv
 ```
 
 `DEEPL_API_KEY` for the DeepL tier, `ANTHROPIC_API_KEY` (or an `ant auth login`
@@ -92,6 +92,34 @@ and the method is fixed in §6 — bilingual raters first, LLM-as-judge only for
 the non-LLM tiers (judging the LLM tier with an LLM is circular), and
 back-translation rejected outright, because a fluent-but-wrong translation
 back-translates fluently and that is precisely the failure being hunted.
+
+## Gold rows: checking the rater, not just the engines
+
+`run` writes one sheet per source language, since each rater reads one, and
+mixes about 5% **gold rows** into each (at least 4, at most 20). A gold row is
+message A's original beside message B's real translation. It reads fluently,
+it sounds casual, and it says the wrong thing, so its known answer is
+`meaning_preserved = n`. It is built this way because the person running the
+harness cannot read the source language, so hand-written reference translations
+are not an option. A mismatch can be built for any language.
+
+Gold rows look like every other row. Only `rating-key.csv` marks them, and they
+never count towards any engine's score. The rater instructions say that checks
+exist without saying which rows they are.
+
+`score` reports, per sheet, how many traps the rater caught. **If any rater
+catches fewer than 80%, the gate is not decided.** It does not quietly drop that
+language and score the rest, because that would change the verdict without
+anyone deciding it should. Re-rate with another rater.
+
+The gap: a rater who marks *everything* wrong passes every trap. Known-good
+rows would catch that, but they need someone who reads the language to write
+them. The report warns instead when a rater marked 95% or more of real rows
+wrong, and asks for a 20-row spot-check before a FAIL is accepted.
+
+Row ids follow display order (`es-1`, `es-2`, ...). They used to follow
+generation order, which let anyone read engine groupings off the `row_id`
+column and would have given away every gold row by its id.
 
 ## The verdict is deliberately coarse
 

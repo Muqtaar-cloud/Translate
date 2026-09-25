@@ -414,6 +414,20 @@ both lists so the tie rule decides, and this pair's honest answer is to decline.
 That is why an unlabelled message goes to a review file with a blank `source`
 that `parseCorpus` rejects, rather than being dropped or guessed at.
 
+**The rater is measured too, with gold rows.** Each language's sheet carries
+about 5% rows whose answer is known: message A's original beside message B's
+translation. That is fluent, casual and wrong, and it can be built without
+reading the language, which is the only kind of known answer this project can
+produce. A rater who catches fewer than 80% of them cannot carry the gate. The
+verdict is withheld, not computed from the remaining raters. Mismatch gold
+cannot catch a rater who marks everything wrong; the report flags that pattern
+for a human spot-check instead.
+
+Building this found a blinding leak in the sheet itself (measured 2026-09-25):
+row ids were assigned before the shuffle, so `r0–r99` were all one engine and
+the `row_id` column told a rater which rows came from the same system. Ids now
+follow display order.
+
 Also counted in this phase, free: **code-switching frequency** (§4.5) and
 **self-hosted MT quality** (§8).
 

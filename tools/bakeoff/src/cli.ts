@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   assertIgnored,
@@ -18,8 +18,24 @@ import { EchoEngine } from "./engines/echo.js";
 import { OnDeviceEngine } from "./engines/ondevice.js";
 import { SelfHostedEngine } from "./engines/selfhosted.js";
 import type { Engine } from "./engines/types.js";
-import { buildRatingSheet, prepare, RATER_INSTRUCTIONS, restoreOutputs, type ScoredOutput } from "./prepare.js";
-import { formatReport, scoreEngine, type EngineScore, type Rating } from "./score.js";
+import {
+  buildRatingSheet,
+  KEY_HEADER,
+  prepare,
+  RATER_INSTRUCTIONS,
+  restoreOutputs,
+  type ScoredOutput,
+} from "./prepare.js";
+import {
+  collectRatings,
+  formatReport,
+  scoreEngine,
+  type EngineScore,
+  type KeyEntry,
+  type Rating,
+  type RaterCheck,
+  type SheetAnswer,
+} from "./score.js";
 
 const OUT = "tools/bakeoff/data";
 
@@ -73,8 +89,16 @@ async function cmdRun(): Promise<void> {
   const engineNames = (process.argv[4] ?? "ondevice,deepl,llm,selfhosted").split(",");
   const target = process.argv[5] ?? "en";
 
-  const corpus = loadCorpus(corpusPath);
+  // A message already in the target language has nothing to translate: the
+  // product routes it to `skip` (known-language), so rating it would score
+  // engines on a case users never see, and hand someone a one-row sheet of
+  // English "translated" into English.
+  const loaded = loadCorpus(corpusPath);
+  const corpus = loaded.filter((m) => m.source !== target);
   console.log(`corpus: ${corpus.length} messages`, summarise(corpus));
+  if (corpus.length < loaded.length) {
+    console.log(`  skipped ${loaded.length - corpus.length} already in ${target}`);
+  }
 
   const all: ScoredOutput[] = [];
   const dnt: Record<string, number[]> = {};
@@ -95,17 +119,35 @@ async function cmdRun(): Promise<void> {
 
   mkdirSync(OUT, { recursive: true });
   const prepared = prepare(corpus, target, { includeContext: false });
-  const { sheet, key } = buildRatingSheet(prepared, all);
 
+  // One sheet per source language, because a rater reads one language. A
+  // single mixed sheet handed a Spanish rater the Portuguese rows too, and made
+  // a per-rater gold check impossible — the traps would be split across two
+  // people with no way to say whose answers they were.
   writeFileSync(join(OUT, "outputs.json"), JSON.stringify({ all, dnt, errors }, null, 2));
-  writeFileSync(join(OUT, "rating-sheet.csv"), sheet);
-  writeFileSync(join(OUT, "rating-key.csv"), key);
+  const keyRows: string[] = [];
+  const written: string[] = [];
+  for (const lang of [...new Set(prepared.map((p) => p.message.source))].sort()) {
+    const mine = prepared.filter((p) => p.message.source === lang);
+    const ids = new Set(mine.map((p) => p.message.id));
+    const { sheet, key, gold } = buildRatingSheet(
+      mine,
+      all.filter((o) => ids.has(o.id)),
+      { prefix: `${lang}-` },
+    );
+    const file = `rating-sheet.${lang}.csv`;
+    writeFileSync(join(OUT, file), sheet);
+    keyRows.push(...key.split("\n").slice(1));
+    written.push(`${file} (${sheet.split("\n").length - 1} rows, ${gold} gold)`);
+  }
+  writeFileSync(join(OUT, "rating-key.csv"), [KEY_HEADER, ...keyRows].join("\n"));
   writeFileSync(join(OUT, "RATER-INSTRUCTIONS.txt"), RATER_INSTRUCTIONS);
 
-  console.log(`\nwrote ${OUT}/rating-sheet.csv (blinded, shuffled)`);
-  console.log(`      ${OUT}/rating-key.csv     (do not give this to raters)`);
+  console.log("");
+  for (const w of written) console.log(`wrote ${OUT}/${w}  blinded, shuffled`);
+  console.log(`      ${OUT}/rating-key.csv  (do not give this to raters: it marks the gold rows)`);
   console.log(`      ${OUT}/RATER-INSTRUCTIONS.txt`);
-  console.log("\nSend the sheet and instructions to a bilingual rater. §6 has the");
+  console.log("\nSend each language's sheet and the instructions to its rater. §6 has the");
   console.log("paid fallback if that stalls — do not substitute an LLM judge for the");
   console.log("LLM tier, and do not substitute back-translation for any of it.");
 }
@@ -123,30 +165,50 @@ function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
+/**
+ * `score [filled-sheet.csv ...]` — every filled sheet, one per rater, against
+ * the single key `run` wrote (override with KEY=path). With no arguments,
+ * scores every rating-sheet*.csv in the data directory.
+ */
 async function cmdScore(): Promise<void> {
-  const sheetPath = process.argv[3] ?? join(OUT, "rating-sheet.csv");
-  const keyPath = process.argv[4] ?? join(OUT, "rating-key.csv");
+  const keyPath = process.env["KEY"] ?? join(OUT, "rating-key.csv");
+  let sheetPaths = process.argv.slice(3);
+  if (sheetPaths.length === 0) {
+    sheetPaths = readdirSync(OUT)
+      .filter((f) => /^rating-sheet.*\.csv$/.test(f))
+      .map((f) => join(OUT, f));
+  }
+  if (sheetPaths.length === 0) throw new Error(`no rating sheets found in ${OUT}`);
 
-  const sheet = parseCsv(readFileSync(sheetPath, "utf8"));
-  const key = new Map(
+  const key = new Map<string, KeyEntry>(
     parseCsv(readFileSync(keyPath, "utf8")).map((r) => [
       r["row_id"] ?? "",
-      { messageId: r["message_id"] ?? "", engine: r["engine"] ?? "" },
+      {
+        messageId: r["message_id"] ?? "",
+        engine: r["engine"] ?? "",
+        // Keys written before gold rows existed have no kind column.
+        kind: r["kind"] === "gold" ? "gold" : "real",
+      },
     ]),
   );
 
-  const yes = (v: string | undefined): boolean => (v ?? "").trim().toLowerCase().startsWith("y");
+  const answer = (v: string | undefined): boolean | null => {
+    const t = (v ?? "").trim().toLowerCase();
+    if (t === "") return null;
+    return t.startsWith("y");
+  };
+
   const ratings: Rating[] = [];
-  for (const row of sheet) {
-    const k = key.get(row["row_id"] ?? "");
-    if (!k) continue;
-    if ((row["meaning_preserved"] ?? "").trim() === "") continue; // unratable
-    ratings.push({
-      messageId: k.messageId,
-      engine: k.engine,
-      meaningPreserved: yes(row["meaning_preserved"]),
-      registerPreserved: yes(row["register_preserved"]),
-    });
+  const checks: RaterCheck[] = [];
+  for (const path of sheetPaths) {
+    const answers: SheetAnswer[] = parseCsv(readFileSync(path, "utf8")).map((row) => ({
+      rowId: row["row_id"] ?? "",
+      meaningPreserved: answer(row["meaning_preserved"]),
+      registerPreserved: answer(row["register_preserved"]),
+    }));
+    const result = collectRatings(path.split("/").pop() ?? path, answers, key);
+    ratings.push(...result.ratings);
+    checks.push(result.check);
   }
 
   let dnt: Record<string, number[]> = {};
@@ -175,9 +237,8 @@ async function cmdScore(): Promise<void> {
     };
   });
 
-  console.log(formatReport(scores));
+  console.log(formatReport(scores, undefined, checks));
 }
-
 
 /**
  * Phase 0b input. `collect <source> <file...>` — see collect.ts for why every
@@ -287,7 +348,7 @@ if (!handler) {
       "  probe [pairs]                     Phase 0a: what this machine can actually do\n" +
       "  collect <source> <file...>        build the 0b corpus from a client export\n" +
       "  run <corpus.jsonl> [engines]      translate + build a blinded rating sheet\n" +
-      "  score [sheet] [key]               Wilson intervals and the coarse verdict\n",
+      "  score [filled-sheet.csv ...]      rater gold checks, Wilson intervals, the verdict\n",
   );
   process.exit(1);
 }

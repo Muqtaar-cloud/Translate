@@ -81,9 +81,101 @@ export function scoreEngine(engine: string, ratings: Rating[]): EngineScore {
   };
 }
 
+/**
+ * A rater must call at least this share of gold rows (known-wrong
+ * translations) wrong. Below it, their ratings cannot carry the gate: a rater
+ * who waves through fluent-but-wrong translations is measuring fluency, and
+ * fluency is the one thing every engine already has.
+ *
+ * 0.8 rather than 1.0 because a mismatch can occasionally land close in
+ * meaning to its host ("ok" beside "vale"), and one such row should not
+ * disqualify a careful rater.
+ */
+export const GOLD_CATCH_FLOOR = 0.8;
+
+/** Share of real rows marked wrong above which the report asks for a spot-check. */
+export const ALL_NO_WARNING = 0.95;
+
+export interface KeyEntry {
+  messageId: string;
+  engine: string;
+  kind: "real" | "gold";
+}
+
+/** One filled row: `null` where the rater left the column blank. */
+export interface SheetAnswer {
+  rowId: string;
+  meaningPreserved: boolean | null;
+  registerPreserved: boolean | null;
+}
+
+export interface RaterCheck {
+  /** Which sheet — in practice, which rater and language. */
+  sheet: string;
+  gold: number;
+  /** Gold rows the rater correctly marked meaning_preserved = n. */
+  caught: number;
+  /** `null` when the sheet has no gold rows, so the rater is unchecked. */
+  passed: boolean | null;
+  realRated: number;
+  realMarkedWrong: number;
+}
+
+/**
+ * Splits one rater's sheet into engine ratings and a reliability check.
+ *
+ * Gold rows never reach an engine score: they are not any engine's output, and
+ * counting them would drag every engine down by the traps' known-wrong answers.
+ */
+export function collectRatings(
+  sheet: string,
+  answers: readonly SheetAnswer[],
+  key: ReadonlyMap<string, KeyEntry>,
+): { ratings: Rating[]; check: RaterCheck } {
+  const ratings: Rating[] = [];
+  let gold = 0;
+  let caught = 0;
+  let realMarkedWrong = 0;
+
+  for (const a of answers) {
+    const k = key.get(a.rowId);
+    if (!k || a.meaningPreserved === null) continue; // unknown or unratable
+
+    if (k.kind === "gold") {
+      gold++;
+      if (!a.meaningPreserved) caught++;
+      continue;
+    }
+
+    if (!a.meaningPreserved) realMarkedWrong++;
+    ratings.push({
+      messageId: k.messageId,
+      engine: k.engine,
+      meaningPreserved: a.meaningPreserved,
+      registerPreserved: a.registerPreserved ?? false,
+    });
+  }
+
+  return {
+    ratings,
+    check: {
+      sheet,
+      gold,
+      caught,
+      passed: gold === 0 ? null : caught / gold >= GOLD_CATCH_FLOOR,
+      realRated: ratings.length,
+      realMarkedWrong,
+    },
+  };
+}
+
 const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
 
-export function formatReport(scores: EngineScore[], codeSwitchRate?: number): string {
+export function formatReport(
+  scores: EngineScore[],
+  codeSwitchRate?: number,
+  checks: readonly RaterCheck[] = [],
+): string {
   const lines: string[] = [];
   lines.push("Phase 0b — translation quality bake-off (PLAN.md §6)");
   lines.push("");
@@ -114,6 +206,40 @@ export function formatReport(scores: EngineScore[], codeSwitchRate?: number): st
           : "in between: single-language detection plus a manual re-translate affordance";
     lines.push(`  code-switching: ${pct(codeSwitchRate)} of messages — ${call} (§4.5)`);
     lines.push("");
+  }
+
+  if (checks.length > 0) {
+    lines.push("  rater checks (gold rows: known-wrong translations mixed into each sheet)");
+    for (const c of checks) {
+      if (c.passed === null) {
+        lines.push(`    ${c.sheet}: no gold rows answered. This rater is unchecked.`);
+      } else {
+        const verdictText = c.passed
+          ? "PASS"
+          : `FAIL, marked ${c.gold - c.caught} of ${c.gold} known-wrong translations as correct`;
+        lines.push(`    ${c.sheet}: caught ${c.caught}/${c.gold}  ${verdictText}`);
+      }
+      if (c.realRated >= 20 && c.realMarkedWrong / c.realRated >= ALL_NO_WARNING) {
+        lines.push(
+          `      marked ${pct(c.realMarkedWrong / c.realRated)} of real rows wrong. Gold rows cannot tell a ` +
+            "harsh rater from bad engines; have someone spot-check 20 rows before accepting a FAIL.",
+        );
+      }
+    }
+    lines.push("");
+  }
+
+  // A verdict built on a rater who waves through wrong translations is the
+  // number the gate was hoping for, not a measurement. Withhold it entirely
+  // rather than quietly scoring the remaining raters: dropping one language
+  // would change the verdict without anyone deciding that it should.
+  const failed = checks.filter((c) => c.passed === false);
+  if (failed.length > 0) {
+    lines.push(
+      `  GATE NOT DECIDED. ${failed.map((c) => c.sheet).join(", ")} failed the gold check, so ` +
+        "these ratings cannot carry the decision. Re-rate with another rater (§6 has the paid fallback).",
+    );
+    return lines.join("\n");
   }
 
   const automatic = scores.filter((s) => s.engine !== "llm" && !s.engine.startsWith("llm:"));

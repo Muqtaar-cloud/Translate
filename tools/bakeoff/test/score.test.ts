@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   BAD_CEILING,
+  collectRatings,
   formatReport,
+  GOLD_CATCH_FLOOR,
   GOOD_FLOOR,
   scoreEngine,
   verdict,
   wilson,
+  type KeyEntry,
   type Rating,
+  type SheetAnswer,
 } from "../src/score.js";
 
 describe("wilson", () => {
@@ -151,5 +155,93 @@ describe("formatReport", () => {
     expect(formatReport([good], 0.02)).toContain("drop per-segment translation");
     expect(formatReport([good], 0.22)).toContain("build per-segment translation");
     expect(formatReport([good], 0.1)).toContain("manual re-translate");
+  });
+});
+
+describe("rater checks (gold rows)", () => {
+  const key = new Map<string, KeyEntry>([
+    ...Array.from({ length: 30 }, (_, i) => [
+      `r${i}`,
+      { messageId: `m${i}`, engine: "deepl", kind: "real" as const },
+    ] as const),
+    ...Array.from({ length: 5 }, (_, i) => [
+      `g${i}`,
+      { messageId: `m${i}`, engine: "gold", kind: "gold" as const },
+    ] as const),
+  ]);
+  const answers = (real: boolean, goldCaught: number): SheetAnswer[] => [
+    ...Array.from({ length: 30 }, (_, i) => ({
+      rowId: `r${i}`,
+      meaningPreserved: real,
+      registerPreserved: real,
+    })),
+    ...Array.from({ length: 5 }, (_, i) => ({
+      rowId: `g${i}`,
+      // Caught means the rater answered n on a known-wrong translation.
+      meaningPreserved: i >= goldCaught,
+      registerPreserved: true,
+    })),
+  ];
+
+  it("keeps gold rows out of every engine's score", () => {
+    const { ratings } = collectRatings("es", answers(true, 5), key);
+    expect(ratings).toHaveLength(30);
+    expect(ratings.every((r) => r.engine === "deepl")).toBe(true);
+  });
+
+  it("passes a rater who catches the traps", () => {
+    expect(collectRatings("es", answers(true, 5), key).check.passed).toBe(true);
+    expect(collectRatings("es", answers(true, 4), key).check.passed).toBe(true);
+  });
+
+  it("fails a rater who waves wrong translations through", () => {
+    const { check } = collectRatings("es", answers(true, 3), key);
+    expect(check.caught).toBe(3);
+    expect(check.passed).toBe(false);
+    expect(3 / 5).toBeLessThan(GOLD_CATCH_FLOOR);
+  });
+
+  it("reports a sheet with no gold rows as unchecked rather than passed", () => {
+    const realOnly = answers(true, 0).filter((a) => a.rowId.startsWith("r"));
+    expect(collectRatings("old", realOnly, key).check.passed).toBeNull();
+  });
+
+  it("skips blank answers instead of counting them either way", () => {
+    const blank = answers(true, 5).map((a) =>
+      a.rowId === "g0" ? { ...a, meaningPreserved: null } : a,
+    );
+    expect(collectRatings("es", blank, key).check.gold).toBe(4);
+  });
+
+  const good = scoreEngine(
+    "deepl",
+    Array.from({ length: 200 }, (_, i) => ({
+      messageId: `m${i}`,
+      engine: "deepl",
+      meaningPreserved: i % 20 !== 0,
+      registerPreserved: true,
+    })),
+  );
+
+  /**
+   * The teeth. An engine that would otherwise pass cannot, if the ratings
+   * behind it came from someone who did not catch the traps.
+   */
+  it("withholds the gate verdict when any rater fails", () => {
+    const passing = collectRatings("rating-sheet.es.csv", answers(true, 5), key).check;
+    const failing = collectRatings("rating-sheet.pt.csv", answers(true, 1), key).check;
+
+    expect(formatReport([good], undefined, [passing])).toContain("GATE PASSED");
+
+    const report = formatReport([good], undefined, [passing, failing]);
+    expect(report).toContain("GATE NOT DECIDED");
+    expect(report).toContain("rating-sheet.pt.csv");
+    expect(report).not.toContain("GATE PASSED");
+  });
+
+  it("asks for a spot-check when a rater marked nearly everything wrong", () => {
+    const harsh = collectRatings("es", answers(false, 5), key).check;
+    expect(harsh.passed).toBe(true); // mismatch gold cannot catch this
+    expect(formatReport([good], undefined, [harsh])).toMatch(/spot-check 20 rows/);
   });
 });
