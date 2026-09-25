@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { leavesDevice, route, type RoutingPolicy } from "../src/routing.js";
 import type { Availability, TranslationRequest } from "../src/types.js";
 
@@ -23,6 +23,19 @@ describe("route", () => {
       kind: "skip",
       reason: "known-language",
     });
+  });
+
+  // Measured 2026-09-25 (PLAN.md §4.1): Chrome's Translator returns
+  // `unavailable` for `en->en` rather than passing the text through. So the
+  // known-language skip has to come BEFORE the availability check, or every
+  // same-language message becomes a spurious `unsupported` — and on a consumer
+  // with cloud enabled, a cloud request for text needing no translation.
+  it("never consults availability for a language I already read", () => {
+    const availability = vi.fn(() => "unavailable" as const);
+    const r = route(req({ source: "en" }), policy("unavailable", { availability }));
+
+    expect(r).toEqual({ kind: "skip", reason: "known-language" });
+    expect(availability).not.toHaveBeenCalled();
   });
 
   it("uses the local path when the pair is available to this consumer", () => {

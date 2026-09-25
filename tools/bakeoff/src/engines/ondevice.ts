@@ -1,3 +1,5 @@
+import { existsSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import { mapLimit, type Engine, type EngineItem, type EngineOutput } from "./types.js";
 
@@ -19,6 +21,47 @@ import { mapLimit, type Engine, type EngineItem, type EngineOutput } from "./typ
  *    limitation of this harness, and it is why Phase 1 needs a per-pair
  *    download UX instead of a silent warm-up.
  */
+/**
+ * Finds a full Chromium.
+ *
+ * The built-in AI APIs are not in the headless shell Playwright downloads by
+ * default, so a bare `chromium.launch({})` fails on a machine that only has the
+ * shell — which is what `npm run probe` did until this was measured, making the
+ * first command in the plan the first one to break.
+ *
+ * Order: an explicit override, then whatever the sandbox has, then Playwright's
+ * own install. Returns undefined for the last case so the caller can ask for the
+ * `chromium` channel by name.
+ *
+ * This is deliberately a second copy of the resolver in
+ * `apps/extension/scripts/smoke.mjs`, not a shared helper: that one is plain
+ * `.mjs` run straight by node, this is a composite TS project with
+ * `rootDir: "."`, and neither can import the other without reshaping the build
+ * to share twenty lines. If a third consumer appears, share it properly.
+ */
+function resolveChromium(): string | undefined {
+  const override = process.env["CHROMIUM_PATH"];
+  if (override) {
+    if (!existsSync(override)) {
+      throw new Error(`CHROMIUM_PATH is set to ${override} but nothing is there`);
+    }
+    return override;
+  }
+
+  const pool = "/opt/pw-browsers";
+  if (existsSync(pool)) {
+    const candidate = readdirSync(pool)
+      .filter((d) => /^chromium-\d+$/.test(d))
+      .sort()
+      .reverse()
+      .map((d) => resolve(pool, d, "chrome-linux/chrome"))
+      .find((f) => existsSync(f));
+    if (candidate) return candidate;
+  }
+
+  return undefined;
+}
+
 export interface ProbeResult {
   apiPresent: boolean;
   detectorPresent: boolean;
@@ -34,13 +77,11 @@ export class OnDeviceEngine implements Engine {
 
   async open(): Promise<Page> {
     if (this.page) return this.page;
-    // The built-in AI APIs are not in the headless shell Playwright downloads
-    // by default; point at a full Chromium build (or a real profile) instead.
-    const executablePath = process.env["CHROMIUM_PATH"];
+    const executablePath = resolveChromium();
     this.browser = await chromium.launch(
       executablePath
         ? { executablePath, headless: false, args: ["--headless=new", "--no-sandbox"] }
-        : {},
+        : { channel: "chromium", headless: false, args: ["--headless=new", "--no-sandbox"] },
     );
     const context = await this.browser.newContext();
     this.page = await context.newPage();

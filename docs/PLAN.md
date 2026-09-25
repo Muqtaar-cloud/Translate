@@ -173,6 +173,28 @@ a real Chrome profile — treat as indicative, not as the 0a result):
   not an edge case, it is the first-run experience for every user, and it
   should be designed as onboarding rather than as an error state.
 
+**Measured 2026-09-25**, same Chromium 1194. Wider pair list, to test claims the
+first probe did not reach:
+
+- **The outbound direction is offered too.** `en→es`, `en→ar` and `en→ja` all
+  returned `downloadable`. The earlier block measured only `N→en`, which is the
+  inbound direction; the composer (§3) is `en→N`, so this is the first evidence
+  that outbound has an on-device path at all rather than being cloud-only by
+  construction. It says nothing about outbound *quality*, which remains
+  unmeasured — the bake-off rates `N→en`.
+- **`tl→en` returned `unavailable`.** The first real language pair observed to
+  have no pack. §4.3's `"no provider"` arm is therefore reachable in ordinary
+  use, not just theoretically: Tagalog is a common group-chat language. The
+  earlier note that the state "fires more rarely than §4.3 implies" stands for
+  pivot pairs and is wrong as a general claim — it depends on the language, not
+  on whether English is one end.
+- **`en→en` returned `unavailable`**, rather than being treated as a no-op. The
+  API rejects the identity pair instead of passing text through, so a
+  known-language skip must happen *before* the availability check. It already
+  does (`route()` returns `skip` first), but nothing was asserting the
+  consequence, and a reordering would have turned every same-language message
+  into a spurious `unsupported`.
+
 ### 4.2 Where translation runs
 The built-in APIs are **not available in Web Workers** (Permissions Policy), so
 they cannot run in the MV3 service worker. Translation and detection run in the
