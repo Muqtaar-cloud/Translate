@@ -34,19 +34,21 @@ const SCRIPTS: [RegExp, string][] = [
 
 /** Common function words. Short, frequent, and rarely shared across languages. */
 const STOPWORDS: Record<string, string[]> = {
-  es: ["que", "de", "la", "el", "en", "no", "los", "una", "por", "con", "para", "está", "pero"],
+  es: ["que", "de", "la", "el", "en", "no", "los", "una", "por", "con", "para", "está", "pero", "yo", "muy", "tengo", "estoy", "también", "le", "os"],
   // "está" and "no" are as common in Portuguese as in Spanish, and listing them
   // under `es` alone handed Spanish a one-word lead on plainly Portuguese text
   // ("alguém pode trazer gelo por favor está quente" scored es=2, pt=1 and was
   // labelled Spanish). A word shared by two languages belongs in both lists, so
   // it cancels out and the tie rule decides — which for this pair means
   // declining to guess, which is the correct answer.
-  pt: ["que", "de", "não", "para", "com", "uma", "os", "mas", "por", "já", "você", "então", "está", "no"],
-  fr: ["que", "de", "le", "la", "les", "des", "est", "pas", "pour", "vous", "avec", "mais"],
+  pt: ["que", "de", "não", "para", "com", "uma", "os", "mas", "por", "já", "você", "então", "está", "no", "eu", "muito", "também", "estou", "tenho", "meu", "minha", "mais"],
+  fr: ["que", "de", "le", "la", "les", "des", "est", "pas", "pour", "vous", "avec", "mais", "je", "suis", "c'est", "j'ai", "très", "et", "en", "il", "ce", "une", "mon", "ne"],
   de: ["der", "die", "das", "und", "ist", "nicht", "ein", "eine", "mit", "auch", "aber", "wir"],
   it: ["che", "di", "il", "la", "non", "per", "con", "una", "sono", "ma", "anche", "come"],
   en: ["the", "is", "you", "and", "to", "of", "it", "that", "for", "with", "are", "but"],
-  tr: ["bir", "ve", "bu", "için", "ama", "çok", "ne", "var", "daha", "gibi"],
+  // Question particles and pronouns: frequent, and shared with none of the
+  // other lists ("mi" is left out — it is Spanish and Italian too).
+  tr: ["bir", "ve", "bu", "için", "ama", "çok", "ne", "var", "daha", "gibi", "ben", "sen", "değil", "mı", "mu", "mü", "musun", "misin", "mısın"],
 };
 
 /**
@@ -63,11 +65,15 @@ const ORTHOGRAPHY: [RegExp, string, number][] = [
   [/[¿¡]/u, "es", 3],
   [/ñ/iu, "es", 2],
   [/[ãõ]/iu, "pt", 3],
-  [/ç/iu, "pt", 1],
   [/ß/iu, "de", 3],
-  [/[äöü]/iu, "de", 1],
+  // Not ö or ü: Turkish uses both constantly, and with them here plainly
+  // Turkish text with no ğ, ş or ı scored as German (4 of 90 reference
+  // sentences). ä is the one German-only vowel of the three.
+  [/ä/iu, "de", 1],
   [/œ/iu, "fr", 3],
-  [/[àèùêô]/iu, "fr", 1],
+  // Not à, ê or ô: Portuguese uses all three ("você", "avô", "à"), and with
+  // them here Portuguese scored as French (6 of 95 reference sentences).
+  [/[èù]/iu, "fr", 1],
   [/[ğşı]/iu, "tr", 3],
 ];
 

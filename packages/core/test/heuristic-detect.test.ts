@@ -26,3 +26,33 @@ describe("Spanish against Portuguese", () => {
     expect(lang("no te preocupes, yo llevo la bebida y el postre")).toBe("es");
   });
 });
+
+/**
+ * Letters and words two languages share must not count for only one of them.
+ * Each case below is a measured mislabel from Tatoeba sentences (PLAN.md §6):
+ * before these fixes, 170 of 5,480 held-out sentences were labelled as the
+ * wrong language, 55 of them Portuguese labelled French.
+ */
+describe("shared letters and words", () => {
+  it("does not read Turkish ö and ü as German", () => {
+    expect(lang("Öğretmen, öğrencilerle iyi başa çıkıyor.")).toBe("tr");
+    expect(lang("Bütün bildiğimiz o, başka bir şey yok.")).not.toBe("de");
+  });
+
+  it("does not read Portuguese ê as French", () => {
+    expect(lang("Você não gosta de histórias de amor.")).toBe("pt");
+  });
+
+  it("does not read ç as Portuguese when it is French or Turkish", () => {
+    expect(lang("Ça me paraît intéressant !")).not.toBe("pt");
+    expect(lang("Sigara içmekten vazgeçtim.")).not.toBe("pt");
+  });
+
+  it("does not read French negation ne as Turkish", () => {
+    expect(lang("Je ne suis pas sûr de pouvoir venir ce soir.")).toBe("fr");
+  });
+
+  it("does not read Spanish tu as French", () => {
+    expect(lang("Quisiera ser tu novio.")).not.toBe("fr");
+  });
+});

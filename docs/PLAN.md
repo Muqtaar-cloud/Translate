@@ -437,6 +437,29 @@ row ids were assigned before the shuffle, so `r0–r99` were all one engine and
 the `row_id` column told a rater which rows came from the same system. Ids now
 follow display order.
 
+**Measured 2026-09-30, for the languages users are expected to meet most:
+French, Chinese, Turkish and Hindi, plus Spanish and Portuguese.**
+
+- **Chrome offers all of them on-device**, both directions and between each
+  other (`fr→zh`, `hi→tr`), including Traditional Chinese (`zh-Hant`). All
+  `downloadable`, as before.
+- **The corpus detector mislabelled 3.1% of clean sentences** in these
+  languages (170 of 5,480 Tatoeba sentences it was never tuned on), 55 of them
+  Portuguese labelled French. Causes, all shared letters or words counted for
+  one language: ê and ô (Portuguese too) as French cues, ö and ü (Turkish too)
+  as German, ç (French and Turkish too) as Portuguese, French "ne" matching
+  Turkish "ne". Fixed, and now 7 of 5,480 (0.1%) on held-out sentences. Chinese
+  and Hindi are detected 100% of the time, since their scripts decide it.
+  Latin-script languages are still declined 17–49% of the time; a declined
+  message goes to review, which is the safe failure.
+- **Romanised Hindi is not detected at all.** "kya kar rahe ho aaj shaam ko",
+  "bhai kal milte hain college ke baad": the detector declines every one,
+  since the only thing it knows about Hindi is Devanagari. If Hindi matters
+  because users meet it, it most likely arrives romanised, and that affects
+  more than the corpus: the extension's detection, the routing decision and
+  translation quality for Hinglish are all unmeasured. This needs its own
+  question before anyone counts Hindi as supported.
+
 Also counted in this phase, free: **code-switching frequency** (§4.5) and
 **self-hosted MT quality** (§8).
 

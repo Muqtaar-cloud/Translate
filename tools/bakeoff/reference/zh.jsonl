@@ -1,0 +1,91 @@
+// Reference pairs for known-good gold rows, language "zh". Built by scripts/build-reference.ts.
+// Source: Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1.
+// 100 chat-like pairs selected; 13 rejected on review, 2 of them for a wrong translation (reasons in review.json).
+// Reviewed by Claude (an LLM), 2026-09-30. Not a native speaker. Each pair was read for whether a careful bilingual rater would answer y; anything wrong, loose, unnatural, odd, or likely to stand out in a chat sheet was rejected.
+{"source":"zh","text":"我以前在山里。","translation":"I was in the mountains.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我要走了。","translation":"I'm going to go.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"他在踢我！","translation":"He's kicking me!","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你待了多久?","translation":"How long did you stay?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你要待多久？","translation":"How long are you going to stay?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"咬我手的就是这条狗。","translation":"It was that dog that bit my hand.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我父亲现在在医院。","translation":"My father is in the hospital now.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我不了解他。","translation":"I can't figure him out.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我是跑得最快的人。","translation":"I am the fastest runner.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我和一位朋友住在一起。","translation":"I am staying with a friend.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"认识您很高兴。","translation":"I am glad to meet you.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你有多高？","translation":"How tall are you?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我清理了桌子。","translation":"I cleared the table.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我们需要更多员工。","translation":"We need more staff.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我住在我姑姑家。","translation":"I'm staying at my aunt's.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"对不起，我来晚了。","translation":"I'm sorry I'm late.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"他被你迷住了。","translation":"He's crazy about you.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我知道我会赢。","translation":"I know I will win.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我打赌他没搞定。","translation":"I bet he doesn't make it.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我出了工伤。","translation":"I had an accident at work.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你有空的时候来看看我们。","translation":"Do come and see us when you are free.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"今天我爱整个世界。","translation":"Today I love the entire world.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"这是在吵什么呀？","translation":"What's the commotion?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"您必须预先付钱。","translation":"You must pay in advance.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你在哪儿修的照相机？","translation":"Where did you get your camera repaired?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我们结束了讨论。","translation":"We closed the discussion.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"您很容易就能看出区别。","translation":"You'll be able to see the difference very easily.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你不要着急。","translation":"Don't worry about it!","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我现在真需要来杯喝的。","translation":"I really need a drink now.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"请拼一下您的名字。","translation":"Spell your name, please.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"那张木椅要多少钱？","translation":"How much does the wooden chair cost?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我想要出国。","translation":"I want to go abroad.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"万一我来晚的话，你不要等我。","translation":"If by any chance I'm late, please don't wait for me.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"公园在什么方向？","translation":"Which direction is the park in?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你喜欢这个城市吗？","translation":"Do you like the city?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我不能忍受。","translation":"I can't stand it.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我是两年前毕业的。","translation":"I graduated two years ago.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"由于噪音，我无法集中精力工作了。","translation":"I can't concentrate on my work because of the noise.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我想关闭我的储蓄账户。","translation":"I am thinking of closing my savings account.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你每个月洗几次车？","translation":"How often do you wash your car a month?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"因为你我们才迟了。","translation":"It's because of you that we were late.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我喜欢狗，我妹妹喜欢猫。","translation":"I like dogs and my sister likes cats.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我不想被牵扯到这件事里。","translation":"I don't want to be involved in that matter.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你能来我真高兴。","translation":"I'm really glad you're here.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你真的很漂亮。","translation":"You're really beautiful.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你能在我的背上涂些防晒霜吗？","translation":"Can you put some suntan lotion on my back?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我希望人们满意。","translation":"I hope people are satisfied.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你想再要点茶吗？","translation":"Do you want some more tea?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你是决定做这个工作的那个人，对吗？","translation":"You're the one who decided to do this job, right?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你自己选择了这份工作，是吗？","translation":"You chose this job yourself, right?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你在找工作吗？","translation":"Are you looking for a job?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你应该承认自己的失败。","translation":"You should acknowledge your failure.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我跟那个事件没有什么关系。","translation":"I had nothing to do with that incident.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"左看右看","translation":"Look to your left, look to your right.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"租车是必须的吗？","translation":"Is it obligatory to rent a car?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"听到这样的消息我真的很难过。","translation":"I'm really sorry to hear that.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"暴风妨碍了我们准时到达。","translation":"The storm prevented us from arriving on time.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我正在读报纸。","translation":"I'm reading the newspaper.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"那边现在是几点？","translation":"What time is it there now?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你快要走了。","translation":"You will be going soon.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你知道我住哪吗？","translation":"Do you know where I live?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你还是去看病吧。","translation":"You'd better see a doctor.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"但我们什么共同点都没有。","translation":"But we don't have anything in common at all.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我是老师。","translation":"I'm a teacher.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你自己应该知道吧。","translation":"You yourself should know.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"明天我想睡得晚一点。","translation":"I'd like to sleep late tomorrow.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我爸爸不是每天都走路上班的。","translation":"My father does not always walk to work.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我想写很多句子","translation":"I want to write a lot of sentences.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我很累，我想我要去睡觉了。","translation":"I'm tired; I think I'm going to go to bed.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"整个晚上他都在开玩笑逗我们开心。","translation":"He entertained us with jokes all evening.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我指望你的帮助。","translation":"I'm counting on your help.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我是去年认识他的。","translation":"I got acquainted with him last year.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我不想跟你交朋友。","translation":"I don't want to be friends with you.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"很快你就会不想她了。","translation":"Pretty soon you will stop thinking of her.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"下一趟火车几点开？","translation":"What time does the next train leave?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我多想会开车啊！","translation":"How I wished I could drive a car!","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你知道这张画是谁画的吗？","translation":"Do you know who painted this picture?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"他给我看了他的影集。","translation":"He showed me his album.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你不是他的对手。","translation":"You're no match for him.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你每天来这里吗？","translation":"Do you come here every day?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我很开心你喜欢。","translation":"I'm glad you liked it.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我经常忘记别人的名字。","translation":"I always have trouble remembering names.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"你等一会然后再给我打电话，可以吗？","translation":"May I ask you to call me back later?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我找不到我的鞋子。","translation":"I can't find my shoes.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"电影已经开始了吗？","translation":"Has the movie started yet?","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"我要一间有淋浴的单人间。","translation":"I'd like a single with a shower, please.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}
+{"source":"zh","text":"没关系，以后不这么说就好了。","translation":"It's fine, just make sure you don't say that again.","origin":"Tatoeba (tatoeba.org), CC-BY 2.0 FR; 2018-11-17 snapshot via facebookresearch/LASER data/tatoeba/v1"}

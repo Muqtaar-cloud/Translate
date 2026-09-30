@@ -1,0 +1,367 @@
+{
+  "reviewer": "Claude (an LLM), 2026-09-30. Not a native speaker. Each pair was read for whether a careful bilingual rater would answer y; anything wrong, loose, unnatural, odd, or likely to stand out in a chat sheet was rejected.",
+  "languages": {
+    "pt": {
+      "candidatesSha256": "66256fa70530ef45ea278ef7fb325a42b3882c2fe50f4136cf79d27abda10c4f",
+      "reviewed": 100,
+      "wrongMeaning": 2,
+      "rejected": [
+        {
+          "text": "As reclamações dela me irritam.",
+          "reason": "meaning: dela is 'her', not 'your'"
+        },
+        {
+          "text": "Seja um pouco mais afável!",
+          "reason": "meaning: afável is 'friendly', not 'merciful'"
+        },
+        {
+          "text": "Agora sou triste.",
+          "reason": "unnatural Portuguese: 'sou triste' for 'estou triste'"
+        },
+        {
+          "text": "Será que vai dar?",
+          "reason": "ambiguous: as likely 'will it work out?'"
+        },
+        {
+          "text": "\"Obrigado.\" \"De nada.\"",
+          "reason": "quoted two-line dialogue, not a chat message"
+        }
+      ]
+    },
+    "es": {
+      "candidatesSha256": "45026b0605f1462a5e746ab0609e8556600acfd68f5e754c944ab32c52afbc80",
+      "reviewed": 100,
+      "wrongMeaning": 1,
+      "rejected": [
+        {
+          "text": "Me gustan las lenguas extranjeras.",
+          "reason": "odd English: 'I like them, foreign languages'"
+        },
+        {
+          "text": "Los resultados de nuestra encuesta permiten algunas conclusiones interesantes.",
+          "reason": "reads like an article, not chat"
+        },
+        {
+          "text": "¿Qué quiere comer de almuerzo?",
+          "reason": "meaning: quiere is 'want', not 'like'"
+        },
+        {
+          "text": "«Ha muerto.» «¡No, no puede ser verdad!»",
+          "reason": "quoted two-line dialogue, not a chat message"
+        },
+        {
+          "text": "Nos veremos a las dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "Te veremos a las dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "Pensé que habíamos dicho dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "Estaba enfermo, así que no fui a la escuela.",
+          "reason": "casual line translated formally"
+        },
+        {
+          "text": "Tengo que estar de vuelta para las dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "Tengo que saberlo antes de las dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "Nos han postpuesto hasta las dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "Tienes que estar allí para las dos y media.",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "¿Por qué no te encuentras conmigo a las dos y media?",
+          "reason": "near-duplicate of the '2:30' family"
+        },
+        {
+          "text": "¿Por qué no has muerto?",
+          "reason": "jarring in a friend's rating sheet"
+        },
+        {
+          "text": "Oí que podrías estar en problemas.",
+          "reason": "near-duplicate of the 'in trouble' family"
+        }
+      ]
+    },
+    "fr": {
+      "candidatesSha256": "f5f2b1219c571bfbfa576eb2152a83a036a9f331bd8d30a7c0f5c36323d3f328",
+      "reviewed": 100,
+      "wrongMeaning": 2,
+      "rejected": [
+        {
+          "text": "Pourquoi les hommes ne sont-ils pas sincères ?",
+          "reason": "meaning: 'why aren't people sincere', not 'use indirectness'"
+        },
+        {
+          "text": "Il ne compte pas du tout sur moi.",
+          "reason": "meaning: 'not at all', not 'not altogether'"
+        },
+        {
+          "text": "S'il ne pleut pas, alors je m'en irai.",
+          "reason": "translation adds 'too'"
+        },
+        {
+          "text": "À cause de l'accident, je suis arrivé en retard à l'école.",
+          "reason": "broken English: 'went too late to school'"
+        },
+        {
+          "text": "Le Président va-t-il démissionner ?",
+          "reason": "ambiguous: Président given as 'chairman'"
+        },
+        {
+          "text": "Personne ne m'invita à la fête.",
+          "reason": "literary past tense (invita)"
+        },
+        {
+          "text": "Qui que ce soit a-t-il de quelconques autres questions ?",
+          "reason": "stilted 'qui que ce soit' construction nobody writes in chat"
+        },
+        {
+          "text": "Connaissez-vous qui que ce soit, ici ?",
+          "reason": "stilted 'qui que ce soit' construction nobody writes in chat"
+        },
+        {
+          "text": "Qui que ce soit d'autre se trouve-t-il dans la maison ?",
+          "reason": "stilted 'qui que ce soit' construction nobody writes in chat"
+        },
+        {
+          "text": "Ai-je manqué à quiconque ?",
+          "reason": "stilted 'quiconque' construction nobody writes in chat"
+        },
+        {
+          "text": "Soudain, ma mère se mit à chanter.",
+          "reason": "literary past tense (se mit)"
+        },
+        {
+          "text": "Je n'avais pas l'intention de blesser qui que ce fut.",
+          "reason": "stilted 'qui que ce fut' construction nobody writes in chat"
+        },
+        {
+          "text": "Avez-vous vu qui que ce soit sur la plage ?",
+          "reason": "stilted 'qui que ce soit' construction nobody writes in chat"
+        },
+        {
+          "text": "As-tu tué qui que ce soit ?",
+          "reason": "stilted 'qui que ce soit' construction nobody writes in chat"
+        },
+        {
+          "text": "Quiconque vous y a-t-il vu ?",
+          "reason": "ungrammatical 'Quiconque vous y a-t-il vu'"
+        },
+        {
+          "text": "L'Amérique est un endroit charmant pour vivre, si c'est pour gagner de l'argent.",
+          "reason": "names a country"
+        },
+        {
+          "text": "« Pour être franc, j'ai le vertige » « Tu es un trouillard ! »",
+          "reason": "quoted dialogue, not a chat message"
+        }
+      ]
+    },
+    "zh": {
+      "candidatesSha256": "0c167a3033b7f1e90e12e0d4504b5df245f2158159d3e0d8a3130e7417b2b785",
+      "reviewed": 100,
+      "wrongMeaning": 2,
+      "rejected": [
+        {
+          "text": "我该去睡觉了。",
+          "reason": "meaning: 'I should', not 'we should'"
+        },
+        {
+          "text": "我一天賺一百歐元。",
+          "reason": "Traditional characters (賺, 歐) the filter missed"
+        },
+        {
+          "text": "不要再把我当成“正常” 人!",
+          "reason": "loose: 'normal' person vs 'common people'"
+        },
+        {
+          "text": "我去年得了中耳炎。",
+          "reason": "medical jargon in the English ('otitis media')"
+        },
+        {
+          "text": "你今天真的很有生產力。",
+          "reason": "Traditional character (產) the filter missed"
+        },
+        {
+          "text": "没有我们能还做的事。",
+          "reason": "ungrammatical Mandarin"
+        },
+        {
+          "text": "那是你姐姐还是妹妹？",
+          "reason": "meaning: asks 'older or younger sister?', not whether she is older"
+        },
+        {
+          "text": "你们是个非常好的团队，但他们的是最好的。",
+          "reason": "unnatural Mandarin"
+        },
+        {
+          "text": "我爱树干。",
+          "reason": "odd content: 'I love the trunk'"
+        },
+        {
+          "text": "女孩给我了一枝红玫瑰和一枝白玫瑰。",
+          "reason": "odd grammar (给我了)"
+        },
+        {
+          "text": "我有一份工资很高工作时间理想的工作.",
+          "reason": "awkward run-on with a Latin full stop"
+        },
+        {
+          "text": "遇不到你。",
+          "reason": "fragment with unclear meaning"
+        },
+        {
+          "text": "“你完成了吗？”“正相反，我还没开始呢。”",
+          "reason": "quoted dialogue, not a chat message"
+        }
+      ]
+    },
+    "tr": {
+      "candidatesSha256": "d19b6a0e426d8dea4396969aa579d4af0af9ce484ad7fee35198b50e40aca54a",
+      "reviewed": 100,
+      "wrongMeaning": 4,
+      "rejected": [
+        {
+          "text": "Bu raporla ilgili olumlu musunuz?",
+          "reason": "calque: 'olumlu' renders English 'positive' (sure) as 'favourable'"
+        },
+        {
+          "text": "O gün bir piyano dersi var mı?",
+          "reason": "meaning: tense and person differ"
+        },
+        {
+          "text": "Bölümün sonunda onun anlamını tahmin etmiş olacaksınız.",
+          "reason": "textbook register"
+        },
+        {
+          "text": "Cathy bu gece bizim bebeği görmek için geliyor.",
+          "reason": "names a person"
+        },
+        {
+          "text": "Sen iyi bir kocasun.",
+          "reason": "typo: kocasun"
+        },
+        {
+          "text": "Beklemekten başka yapabileceğim bir şey yok.",
+          "reason": "archaic English: 'I can but wait'"
+        },
+        {
+          "text": "Onu uğurlamak için az önce havalanındaydım.",
+          "reason": "typo: havalanında"
+        },
+        {
+          "text": "Hâlâ bir atışın var.",
+          "reason": "calque: 'you still have a shot' taken literally"
+        },
+        {
+          "text": "Takımı ben yapmadım.",
+          "reason": "calque: 'make the team' taken literally"
+        },
+        {
+          "text": "Afedersiniz, ama postaneyi arıyorum",
+          "reason": "typo: Afedersiniz"
+        }
+      ]
+    },
+    "hi": {
+      "candidatesSha256": "7a01a570408c8cd17178bab441b570839594b8b95e4554cb6ec2e56f61aa9471",
+      "reviewed": 100,
+      "wrongMeaning": 3,
+      "rejected": [
+        {
+          "text": "यह दवाई तुम्हारा गला साफ़ कर देगी।",
+          "reason": "meaning: गला is 'throat', not 'cold'"
+        },
+        {
+          "text": "\"क्या बात है?\" छोटे सफ़ेद खरगोश ने पूछा।",
+          "reason": "quoted narrative, not a chat message"
+        },
+        {
+          "text": "आप वहाँ जाएँगे क्या?",
+          "reason": "meaning: a question, not a request"
+        },
+        {
+          "text": "वह मेरा पुस्तक है।",
+          "reason": "ungrammatical: मेरा पुस्तक (feminine noun)"
+        },
+        {
+          "text": "मेरे हुक्म की तामील की जाय।",
+          "reason": "archaic register"
+        },
+        {
+          "text": "\"क्या करूँ?\" मैंने अपने-आप से पूछा।",
+          "reason": "quoted narrative, not a chat message"
+        },
+        {
+          "text": "हम आजीवन आपके साथ है।",
+          "reason": "ungrammatical, and odd English"
+        },
+        {
+          "text": "कया तुम ध्यान से किताब पाढ़ सकते हो ?",
+          "reason": "typos: कया, पाढ़"
+        },
+        {
+          "text": "जब आप जागृत अवस्था में होते हैं, तो ही सर्वश्रेष्ठ स्वप्नों का सृजन होता है.",
+          "reason": "formal Sanskritised register"
+        },
+        {
+          "text": "आप वास्तविकता से अपनी आंखे मूंद सकते हैं, मगर स्मृतियों से नहीं।",
+          "reason": "aphorism, not chat"
+        },
+        {
+          "text": "मैंने कई दोस्तों को चोदा।",
+          "reason": "explicit; jarring in a friend's rating sheet"
+        },
+        {
+          "text": "सेक्स मेरे लिये महत्त्वपूर्ण है।",
+          "reason": "jarring in a friend's rating sheet"
+        },
+        {
+          "text": "मैं उसके घिसे-पिटे विचार का खंडन नहीं करना चाहता हूं।",
+          "reason": "formal register"
+        },
+        {
+          "text": "आप अपनी सोच बदल दीजिए, आपकी दुनिया बदल जाएगी।",
+          "reason": "aphorism, not chat"
+        },
+        {
+          "text": "उसने तुम से क्या कहाँ?",
+          "reason": "typo changes the word: कहाँ (where) for कहा (said)"
+        },
+        {
+          "text": "अगर आपके पास थोड़ा समय हो, तो कृपया निम्न वाक्यों का अनुवाद करेंगे?",
+          "reason": "Tatoeba sentence about translating Tatoeba"
+        },
+        {
+          "text": "आप तो यह भी जानते कि मैं कौन हूँ।",
+          "reason": "meaning: missing नहीं, so it says the opposite"
+        },
+        {
+          "text": "क्या वे ज़िंदा हैं?",
+          "reason": "English typo: 'live' for 'alive'"
+        },
+        {
+          "text": "इस अल्फाज का मतलब क्या है?",
+          "reason": "ungrammatical: इस अल्फाज"
+        },
+        {
+          "text": "तुम ने मुझे वह कल बताना चाहिए था।",
+          "reason": "ungrammatical"
+        }
+      ]
+    }
+  }
+}

@@ -18,10 +18,11 @@ npm run collect telegram ~/Downloads/Telegram/result.json
 npm run collect discord-html ~/saved-channel.html
 LANGUAGES=es,pt PER_LANGUAGE=100 npm run collect telegram result.json
 
-# Reference translations for known-good check rows, one file per language:
-# download <lang>-eng.zip from manythings.org/anki (Tatoeba pairs) and pass the .txt
-npx tsx tools/bakeoff/src/cli.ts gold-import es spa.txt
-npx tsx tools/bakeoff/src/cli.ts gold-import pt por.txt
+# Reference translations for known-good check rows ship with the harness for
+# es, pt, fr, zh (Simplified), tr and hi (tools/bakeoff/reference/). For any
+# other language, or to use your own, import Tatoeba pairs; an import wins:
+npx tsx tools/bakeoff/src/cli.ts gold-import it ita.txt   # from manythings.org/anki
+npx tsx tools/bakeoff/scripts/build-reference.ts           # rebuild the shipped files
 
 # Validate the pipeline before spending money or a rater's afternoon
 npx tsx tools/bakeoff/src/cli.ts run corpus.jsonl echo
@@ -108,11 +109,55 @@ most 20):
   It reads fluently, it sounds casual, and it says the wrong thing, so its
   answer is `meaning_preserved = n`. It can be built for any language without
   reading it.
-- **Known-good:** a sentence and its human translation from Tatoeba, imported
-  with `gold-import`. Its answer is `y`. These exist because a rater who
-  answers `n` to everything passes every known-wrong row. They need a
-  reference file for the language; without one, `run` warns and the sheet
-  carries known-wrong rows only.
+- **Known-good:** a sentence and its human translation from Tatoeba. Its
+  answer is `y`. These exist because a rater who answers `n` to everything
+  passes every known-wrong row. They need a reference file for the language:
+  one ships for Spanish, Portuguese, French, Chinese, Turkish and Hindi, and
+  `gold-import` adds any other. Without one, `run` warns and the sheet carries
+  known-wrong rows only.
+
+### The shipped reference files
+
+`tools/bakeoff/reference/<lang>.jsonl`, built by `scripts/build-reference.ts`
+from Tatoeba's 2018 snapshot as published in facebookresearch/LASER (1,000
+sentence pairs per language; tatoeba.org itself was unreachable from where
+this was built). Licence CC-BY 2.0 FR, credited on every line.
+
+The build filters to chat-like lines, keeps 100 per language, and drops what
+review rejected. Every kept pair was read, and the reasons for each rejection
+are in `reference/review.json`:
+
+| | es | pt | fr | zh | tr | hi |
+|---|---|---|---|---|---|---|
+| kept | 85 | 95 | 83 | 87 | 90 | 80 |
+| rejected | 15 | 5 | 17 | 13 | 10 | 20 |
+| of which the translation was wrong | 1 | 2 | 2 | 2 | 4 | 3 |
+
+Most rejections are not wrong translations. They are lines that would stand
+out in a chat sheet or that a careful rater might hesitate over: stilted
+constructions, literary tenses, typos, quoted dialogue, a family of ten near-
+identical "2:30" sentences. The wrong ones include Turkish calques written
+from English ("olumlu" for *positive* meaning sure; *make the team* taken
+literally) and a Hindi line missing its "नहीं", which says the opposite of its
+translation.
+
+**The review was done by Claude, an LLM, not by native speakers.** It is not
+circular (gold rows check raters, not the engines being rated), but it is not
+a native speaker's read either. If one can skim a file, do it.
+
+The build refuses to drift: source files are pinned by SHA-256, and if the
+filter ever produces a different candidate list than the one reviewed, the
+build stops rather than shipping unreviewed pairs.
+
+**Chinese is Simplified only**, because a chat uses one script and Tatoeba
+mixes them line by line. For a Traditional-Chinese chat (Taiwan, Hong Kong),
+run `gold-import zh-Hant <pairs.txt>`: it keeps the Traditional lines and
+writes the file `run` uses for Chinese, replacing the Simplified one on that
+machine.
+
+**Hindi is Devanagari**, and many Indian group chats are written in romanised
+Hindi instead. In a romanised chat these rows would stand out, and the
+corpus detector declines romanised Hindi entirely (see PLAN.md §6).
 
 `gold-import` keeps only pairs that could pass for chat: short, addressed to
 someone, no Tatoeba stock names (Tom and Mary are in about a fifth of its

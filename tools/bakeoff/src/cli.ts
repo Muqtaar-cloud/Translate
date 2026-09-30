@@ -45,6 +45,8 @@ import {
 } from "./score.js";
 
 const OUT = "tools/bakeoff/data";
+/** Reviewed reference pairs committed with the harness, one file per language. */
+const REFERENCE = "tools/bakeoff/reference";
 
 function selectEngines(names: string[]): Engine[] {
   const engines: Engine[] = [];
@@ -138,8 +140,12 @@ async function cmdRun(): Promise<void> {
   for (const lang of [...new Set(prepared.map((p) => p.message.source))].sort()) {
     const mine = prepared.filter((p) => p.message.source === lang);
     const ids = new Set(mine.map((p) => p.message.id));
-    const refPath = join(OUT, `gold-good.${lang}.jsonl`);
-    const reference: ReferencePair[] = existsSync(refPath) ? loadReference(refPath) : [];
+    // Your own import wins; otherwise the reviewed pairs committed with the
+    // harness (tools/bakeoff/reference, built by scripts/build-reference.ts).
+    const refPath = [join(OUT, `gold-good.${lang}.jsonl`), join(REFERENCE, `${lang}.jsonl`)].find((f) =>
+      existsSync(f),
+    );
+    const reference: ReferencePair[] = refPath ? loadReference(refPath) : [];
     const { sheet, key, goldWrong, goldRight } = buildRatingSheet(
       mine,
       all.filter((o) => ids.has(o.id)),
@@ -298,7 +304,10 @@ async function cmdGoldImport(): Promise<void> {
   const { kept, rejected } = selectReference(pairs, max);
 
   mkdirSync(OUT, { recursive: true });
-  const out = join(OUT, `gold-good.${lang}.jsonl`);
+  // The detector labels Chinese "zh" whatever its script, so a Traditional
+  // import has to land where `run` looks for "zh" — overriding the shipped
+  // Simplified file for this machine.
+  const out = join(OUT, `gold-good.${lang === "zh-Hant" ? "zh" : lang}.jsonl`);
   writeFileSync(out, formatReference(kept));
 
   console.log(`read ${pairs.length} pairs, kept ${kept.length} that read like chat`);

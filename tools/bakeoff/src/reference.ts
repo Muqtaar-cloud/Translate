@@ -63,6 +63,75 @@ export function parseTabbedPairs(
 }
 
 /**
+ * Two line-aligned files, one sentence per line: line n of `sourceText`
+ * translates line n of `englishText`. The layout of the Tatoeba test sets in
+ * facebookresearch/LASER, the one copy of Tatoeba reachable from a sandbox
+ * whose network blocks tatoeba.org, manythings.org and Hugging Face.
+ */
+export function parseAlignedPairs(
+  sourceText: string,
+  englishText: string,
+  source: string,
+  origin: string,
+): ReferencePair[] {
+  const src = sourceText.split("\n");
+  const eng = englishText.split("\n");
+  if (Math.abs(src.length - eng.length) > 1) {
+    // A one-line difference is a trailing newline; more is misalignment, and a
+    // misaligned file would turn every "known-good" row into a mismatch.
+    throw new Error(`aligned files differ in length: ${src.length} vs ${eng.length} lines`);
+  }
+  const out: ReferencePair[] = [];
+  for (let i = 0; i < Math.min(src.length, eng.length); i++) {
+    const text = src[i]?.replace(/\r$/, "").trim() ?? "";
+    const translation = eng[i]?.replace(/\r$/, "").trim() ?? "";
+    if (text !== "" && translation !== "") out.push({ source, text, translation, origin });
+  }
+  return out;
+}
+
+/**
+ * Characters that exist only in Traditional Chinese.
+ *
+ * Tatoeba's Mandarin mixes both scripts line by line. A chat uses one, so a
+ * check row in the other script is a check row announcing itself. Not a
+ * converter, and not complete: a line with none of these may still be
+ * Traditional. Measured: the first, shorter list (function characters only)
+ * let 14 of 100 Traditional lines through — 麻煩, 週, 髒, 滿, 筆, 證據, 藍, 斷,
+ * 運, 體, 樓 — and the second still missed 禮, 擾, 獨, 傘, 兒, so it now covers
+ * common content characters too. Whatever still slips through, review catches. Every entry has
+ * a distinct Simplified form; characters shared by both scripts (麻, 幸, 眼,
+ * 餐) are deliberately absent.
+ */
+const TRADITIONAL_ONLY = new Set(
+  [
+    "們這個說話沒還會為來時對國過關點麼開裡後現樣見學問讓車電請謝買賣東與從當發",
+    "經頭長門間實應該幾網讀寫書氣歡難聽覺將錢貓愛變邊遠記錯雙雖醫號總種親機歲嗎",
+    "給煩週內髒滿筆談證據藍領帶斷運體樓裝訂隻塊熱聲視臉鐘錶飯飲館鳥魚馬雞鴨貝風",
+    "飛雲陽陰腦眾無燈爭戰畫劃節範韓華歷曆壞亂認識語誤課試詩誰調論設許計訊講議護",
+    "權觀顏題顯類餓餘駕驗髮鬆鬧麗黨齊齒龍龜衛術補製複觸軍輕載輪轉辦農進適選郵釋",
+    "鍵閉閒陳陸隊階際隨險隱離靜頁項順須顧飽養驚鬥鹽麥黃於裏夠",
+    "禮擾獨傘兒夢聯蘭羅蘇義藝處虛衝襪訴詢誇賽贏趕跡蹤躍輩遲達違鄉鄰鍋鏡閃陣雜霧響頓頻顆餅驕鬍",
+  ].join("").split(""),
+);
+
+/** Cantonese-only characters: a Cantonese line is a different language. */
+const CANTONESE_ONLY = new Set("啲咩嚟㗎嘅佢冇喺哋咁嘢唔咗嗰".split(""));
+
+export function isTraditionalChinese(text: string): boolean {
+  for (const ch of text) if (TRADITIONAL_ONLY.has(ch)) return true;
+  return false;
+}
+
+export function isCantonese(text: string): boolean {
+  for (const ch of text) if (CANTONESE_ONLY.has(ch)) return true;
+  return false;
+}
+
+/** Languages whose script is not Latin, so Latin letters in a line are a name. */
+const NON_LATIN = new Set(["zh", "zh-Hant", "hi", "ar", "ru", "ja", "ko", "he", "el", "th"]);
+
+/**
  * Tatoeba's placeholder cast. Close to a fifth of its English sentences name
  * Tom or Mary, and a chat sheet with "Tom" in it is a check row announcing
  * itself.
@@ -73,6 +142,7 @@ const STOCK_NAMES = /\b(tom|mary|john|alice|bob|jack|ken)\b/i;
 const CONVERSATIONAL = /\b(i|i'm|i'll|i've|i'd|me|my|you|you're|you'll|your|we|we're|let's|us|our)\b/i;
 
 export type RejectReason =
+  | "script"
   | "length"
   | "stock-name"
   | "proper-noun"
@@ -86,8 +156,20 @@ export type RejectReason =
  */
 export function chatLike(pair: ReferencePair): RejectReason | null {
   const { text, translation } = pair;
-  if (text.length < 15 || text.length > 70) return "length";
-  if (text.split(/\s+/).length < 3) return "length";
+  // Length is judged on the English side, because it is the only side whose
+  // length means the same thing in every language: fifteen characters is a
+  // short Spanish line and a long Chinese one, and Chinese has no spaces to
+  // count words by. The source side only gets a sanity cap.
+  if (translation.length < 12 || translation.length > 70) return "length";
+  if (translation.split(/\s+/).length < 3) return "length";
+  if (text.length > 90) return "length";
+  // "zh" is Simplified; "zh-Hant" is the import variant for a Traditional
+  // chat, which keeps Traditional lines and still drops Cantonese.
+  if (pair.source === "zh" && (isTraditionalChinese(text) || isCantonese(text))) return "script";
+  if (pair.source === "zh-Hant" && isCantonese(text)) return "script";
+  // "Luke，我是你的爸爸" — a name in Latin letters inside a non-Latin line
+  // gets past the capital-letter check below, which only reads the English.
+  if (NON_LATIN.has(pair.source) && /[A-Za-z]/.test(text)) return "proper-noun";
   if (STOCK_NAMES.test(translation) || STOCK_NAMES.test(text)) return "stock-name";
 
   // A capital letter mid-sentence, other than "I", is almost always a name or
@@ -120,6 +202,7 @@ export function selectReference(
   max = 500,
 ): { kept: ReferencePair[]; rejected: Record<RejectReason | "duplicate", number> } {
   const rejected: Record<RejectReason | "duplicate", number> = {
+    script: 0,
     length: 0,
     "stock-name": 0,
     "proper-noun": 0,
