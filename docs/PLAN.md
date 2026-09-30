@@ -419,9 +419,18 @@ about 5% rows whose answer is known: message A's original beside message B's
 translation. That is fluent, casual and wrong, and it can be built without
 reading the language, which is the only kind of known answer this project can
 produce. A rater who catches fewer than 80% of them cannot carry the gate. The
-verdict is withheld, not computed from the remaining raters. Mismatch gold
-cannot catch a rater who marks everything wrong; the report flags that pattern
-for a human spot-check instead.
+verdict is withheld, not computed from the remaining raters.
+
+Mismatch gold cannot catch a rater who marks everything wrong, so each sheet
+also carries **known-good** rows: a sentence and its human translation from
+Tatoeba, imported per language (`bakeoff gold-import`), whose answer is y.
+This is the one place the project borrows a translation it cannot check
+itself. It is filtered to chat-like lines, and it is not clean: a 20-pair
+Spanish sample held one calque ("Dadme un anillo", hand me a ring, the
+jewellery, for "Give me a ring", call me), which is part of why the floor is
+80% and not 100%. Neither kind catches a rater who is reading but unusually
+strict; the report flags a rater who marked 95%+ of real rows wrong for a
+spot-check.
 
 Building this found a blinding leak in the sheet itself (measured 2026-09-25):
 row ids were assigned before the shuffle, so `r0–r99` were all one engine and

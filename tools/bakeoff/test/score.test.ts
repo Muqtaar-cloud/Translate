@@ -166,7 +166,7 @@ describe("rater checks (gold rows)", () => {
     ] as const),
     ...Array.from({ length: 5 }, (_, i) => [
       `g${i}`,
-      { messageId: `m${i}`, engine: "gold", kind: "gold" as const },
+      { messageId: `m${i}`, engine: "gold-wrong", kind: "gold-wrong" as const },
     ] as const),
   ]);
   const answers = (real: boolean, goldCaught: number): SheetAnswer[] => [
@@ -196,7 +196,7 @@ describe("rater checks (gold rows)", () => {
 
   it("fails a rater who waves wrong translations through", () => {
     const { check } = collectRatings("es", answers(true, 3), key);
-    expect(check.caught).toBe(3);
+    expect(check.wrongCaught).toBe(3);
     expect(check.passed).toBe(false);
     expect(3 / 5).toBeLessThan(GOLD_CATCH_FLOOR);
   });
@@ -210,7 +210,7 @@ describe("rater checks (gold rows)", () => {
     const blank = answers(true, 5).map((a) =>
       a.rowId === "g0" ? { ...a, meaningPreserved: null } : a,
     );
-    expect(collectRatings("es", blank, key).check.gold).toBe(4);
+    expect(collectRatings("es", blank, key).check.wrongGold).toBe(4);
   });
 
   const good = scoreEngine(
@@ -243,5 +243,64 @@ describe("rater checks (gold rows)", () => {
     const harsh = collectRatings("es", answers(false, 5), key).check;
     expect(harsh.passed).toBe(true); // mismatch gold cannot catch this
     expect(formatReport([good], undefined, [harsh])).toMatch(/spot-check 20 rows/);
+  });
+});
+
+describe("known-good gold rows", () => {
+  const key = new Map<string, KeyEntry>([
+    ...Array.from({ length: 30 }, (_, i) => [`r${i}`, { messageId: `m${i}`, engine: "deepl", kind: "real" as const }] as const),
+    ...Array.from({ length: 5 }, (_, i) => [`w${i}`, { messageId: `m${i}`, engine: "gold-wrong", kind: "gold-wrong" as const }] as const),
+    ...Array.from({ length: 5 }, (_, i) => [`k${i}`, { messageId: `ref-${i}`, engine: "gold-right", kind: "gold-right" as const }] as const),
+  ]);
+  const everyRow = (answer: (rowId: string) => boolean): SheetAnswer[] =>
+    [...key.keys()].map((rowId) => ({ rowId, meaningPreserved: answer(rowId), registerPreserved: true }));
+
+  /**
+   * The case known-good rows exist for. Answering n to everything passes every
+   * mismatch trap; it cannot pass rows whose correct answer is y.
+   */
+  it("fails a rater who answers n to everything", () => {
+    const { check } = collectRatings("es", everyRow(() => false), key);
+    expect(check.wrongCaught).toBe(5);
+    expect(check.rightCaught).toBe(0);
+    expect(check.passed).toBe(false);
+  });
+
+  it("would have passed that rater without known-good rows, which is the gap they close", () => {
+    const withoutRight = new Map([...key].filter(([, k]) => k.kind !== "gold-right"));
+    expect(collectRatings("es", everyRow(() => false), withoutRight).check.passed).toBe(true);
+  });
+
+  it("passes a careful rater, who gets both kinds right", () => {
+    const careful = everyRow((id) => !id.startsWith("w"));
+    expect(collectRatings("es", careful, key).check.passed).toBe(true);
+  });
+
+  /** Tatoeba is community-written; one bad pair must not sink a careful rater. */
+  it("tolerates one bad reference pair out of five", () => {
+    const careful = everyRow((id) => !id.startsWith("w") && id !== "k0");
+    const { check } = collectRatings("es", careful, key);
+    expect(check.rightCaught).toBe(4);
+    expect(check.passed).toBe(true);
+  });
+
+  it("keeps known-good rows out of every engine's score", () => {
+    const { ratings } = collectRatings("es", everyRow(() => true), key);
+    expect(ratings).toHaveLength(30);
+    expect(ratings.some((r) => r.engine === "gold-right")).toBe(false);
+  });
+
+  it("names the failure in the report and withholds the gate", () => {
+    const good = scoreEngine("deepl", Array.from({ length: 200 }, (_, i) => ({ messageId: `m${i}`, engine: "deepl", meaningPreserved: i % 20 !== 0, registerPreserved: true })));
+    const check = collectRatings("rating-sheet.es.csv", everyRow(() => false), key).check;
+    const report = formatReport([good], undefined, [check]);
+    expect(report).toContain("marked 5 of 5 known-good translations as wrong");
+    expect(report).toContain("GATE NOT DECIDED");
+  });
+
+  it("says so when a sheet has no known-good rows at all", () => {
+    const withoutRight = new Map([...key].filter(([, k]) => k.kind !== "gold-right"));
+    const check = collectRatings("es", everyRow((id) => !id.startsWith("w")), withoutRight).check;
+    expect(formatReport([], undefined, [check])).toMatch(/no known-good rows in this sheet/);
   });
 });

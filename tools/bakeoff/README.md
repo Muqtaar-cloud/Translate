@@ -18,6 +18,11 @@ npm run collect telegram ~/Downloads/Telegram/result.json
 npm run collect discord-html ~/saved-channel.html
 LANGUAGES=es,pt PER_LANGUAGE=100 npm run collect telegram result.json
 
+# Reference translations for known-good check rows, one file per language:
+# download <lang>-eng.zip from manythings.org/anki (Tatoeba pairs) and pass the .txt
+npx tsx tools/bakeoff/src/cli.ts gold-import es spa.txt
+npx tsx tools/bakeoff/src/cli.ts gold-import pt por.txt
+
 # Validate the pipeline before spending money or a rater's afternoon
 npx tsx tools/bakeoff/src/cli.ts run corpus.jsonl echo
 
@@ -96,26 +101,42 @@ back-translates fluently and that is precisely the failure being hunted.
 ## Gold rows: checking the rater, not just the engines
 
 `run` writes one sheet per source language, since each rater reads one, and
-mixes about 5% **gold rows** into each (at least 4, at most 20). A gold row is
-message A's original beside message B's real translation. It reads fluently,
-it sounds casual, and it says the wrong thing, so its known answer is
-`meaning_preserved = n`. It is built this way because the person running the
-harness cannot read the source language, so hand-written reference translations
-are not an option. A mismatch can be built for any language.
+mixes in two kinds of **gold row**, each about 5% of the sheet (at least 4, at
+most 20):
+
+- **Known-wrong:** message A's original beside message B's real translation.
+  It reads fluently, it sounds casual, and it says the wrong thing, so its
+  answer is `meaning_preserved = n`. It can be built for any language without
+  reading it.
+- **Known-good:** a sentence and its human translation from Tatoeba, imported
+  with `gold-import`. Its answer is `y`. These exist because a rater who
+  answers `n` to everything passes every known-wrong row. They need a
+  reference file for the language; without one, `run` warns and the sheet
+  carries known-wrong rows only.
+
+`gold-import` keeps only pairs that could pass for chat: short, addressed to
+someone, no Tatoeba stock names (Tom and Mary are in about a fifth of its
+sentences), no places, no textbook narration. Of 118,964 Spanish pairs, 49,879
+pass; 500 are kept, spread across the file. The originals are still not
+from the chat, so a rater who is in the channel may spot them. Tatoeba is also
+community-written: a 20-pair sample held one calque, "Dadme un anillo" (hand me
+a ring, the jewellery) for "Give me a ring" (call me). If someone who reads the
+language can skim the imported file and delete bad lines, do it.
 
 Gold rows look like every other row. Only `rating-key.csv` marks them, and they
 never count towards any engine's score. The rater instructions say that checks
 exist without saying which rows they are.
 
-`score` reports, per sheet, how many traps the rater caught. **If any rater
-catches fewer than 80%, the gate is not decided.** It does not quietly drop that
+`score` reports, per sheet, how many of each kind the rater got right. **If
+any rater gets fewer than 80% of either kind right, the gate is not decided.** It does not quietly drop that
 language and score the rest, because that would change the verdict without
 anyone deciding it should. Re-rate with another rater.
 
-The gap: a rater who marks *everything* wrong passes every trap. Known-good
-rows would catch that, but they need someone who reads the language to write
-them. The report warns instead when a rater marked 95% or more of real rows
-wrong, and asks for a 20-row spot-check before a FAIL is accepted.
+What gold rows cannot catch is a rater who reads carefully but is unusually
+strict: a clean reference translation is obviously right, so they answer `y`
+there and `n` to engine output. The report flags any rater who marked 95% or
+more of real rows wrong, and asks for a 20-row spot-check before a FAIL is
+accepted.
 
 Row ids follow display order (`es-1`, `es-2`, ...). They used to follow
 generation order, which let anyone read engine groupings off the `row_id`

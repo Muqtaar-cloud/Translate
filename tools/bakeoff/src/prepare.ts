@@ -1,5 +1,6 @@
 import { mask, restore, survivalRate } from "@polyglot/core";
 import type { CorpusMessage } from "./corpus.js";
+import type { ReferencePair } from "./reference.js";
 import type { EngineItem, EngineOutput } from "./engines/types.js";
 
 /**
@@ -82,10 +83,14 @@ const csvCell = (s: string): string => `"${s.replaceAll('"', '""')}"`;
  * thing is n"). Its known answer is always meaning_preserved = n.
  *
  * What mismatch gold cannot catch is a rater who marks everything n: they pass
- * every trap. Known-good rows would catch that, and they need someone who reads
- * the language to write them. The score report warns when a rater's real rows
- * are almost all n instead, because only a human spot-check can separate a
- * harsh rater from genuinely bad engines.
+ * every trap. So there is a second kind, `gold-right`: a sentence and its
+ * human translation from a reference file (reference.ts — Tatoeba pairs,
+ * imported per language), whose known answer is y. Those need a translation
+ * someone has already checked, which is why they come from outside the project
+ * and are only present when a reference file exists for the language.
+ *
+ * Both kinds are budgeted separately with the same formula, so a sheet with a
+ * reference file carries about 10% checks.
  */
 export const GOLD_RATE = 0.05;
 export const GOLD_MIN = 4;
@@ -115,20 +120,31 @@ function overlap(a: string, b: string): number {
 
 export const KEY_HEADER = "row_id,message_id,engine,kind,donor_message_id";
 
+/** `gold-wrong`: known answer n (a mismatch). `gold-right`: known answer y. */
+export type RowKind = "real" | "gold-wrong" | "gold-right";
+
 export interface SheetOptions {
   seed?: number;
   /** Row-id prefix, e.g. `es-` for the Spanish rater's sheet. */
   prefix?: string;
   /** Mix in gold rows. On by default; off only for tests of the plain sheet. */
   gold?: boolean;
+  /**
+   * Human reference translations for this sheet's language, for known-good
+   * rows. Without them the sheet carries mismatch rows only, and a rater who
+   * answers n to everything goes undetected.
+   */
+  reference?: readonly ReferencePair[];
 }
 
 interface SheetRow {
   id: string;
   engine: string;
   restored: string;
-  kind: "real" | "gold";
+  kind: RowKind;
   donor?: string;
+  /** Set for known-good rows, whose original is not a corpus message. */
+  original?: string;
 }
 
 /**
@@ -150,8 +166,8 @@ export function buildRatingSheet(
   prepared: PreparedMessage[],
   outputs: ScoredOutput[],
   opts: SheetOptions = {},
-): { sheet: string; key: string; gold: number } {
-  const { seed = 42, prefix = "r", gold = true } = opts;
+): { sheet: string; key: string; goldWrong: number; goldRight: number } {
+  const { seed = 42, prefix = "r", gold = true, reference = [] } = opts;
   const byId = new Map(prepared.map((p) => [p.message.id, p.message]));
 
   // Deterministic, so a re-run produces the same sheet and the same key.
@@ -213,8 +229,40 @@ export function buildRatingSheet(
       if (!best) continue;
 
       usedDonors.add(best.id);
-      rows.push({ id: host, engine: "gold", restored: best.restored, kind: "gold", donor: best.id });
+      rows.push({
+        id: host,
+        engine: "gold-wrong",
+        restored: best.restored,
+        kind: "gold-wrong",
+        donor: best.id,
+      });
     }
+  }
+  const goldWrong = rows.length - real.length;
+
+  if (gold && reference.length > 0 && real.length > 0) {
+    // Never reuse a line that is also a real message in this sheet: the rater
+    // would see one original with two different translations and a trap.
+    const inSheet = new Set(prepared.map((p) => p.message.text.trim().toLowerCase()));
+    const pool = reference.filter((r) => !inSheet.has(r.text.trim().toLowerCase()));
+    const wanted = goldCount(real.length, pool.length);
+
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [pool[i], pool[j]] = [pool[j] as ReferencePair, pool[i] as ReferencePair];
+    }
+
+    pool.slice(0, wanted).forEach((pair, k) => {
+      rows.push({
+        id: `ref-${k + 1}`,
+        engine: "gold-right",
+        // Chat rarely ends a line with a full stop, and a column of tidy
+        // sentences among real messages would mark the check rows.
+        original: pair.text.replace(/\.$/, ""),
+        restored: pair.translation,
+        kind: "gold-right",
+      });
+    });
   }
 
   for (let i = rows.length - 1; i > 0; i--) {
@@ -232,7 +280,7 @@ export function buildRatingSheet(
   const sheet = [
     "row_id,original,translation,meaning_preserved,register_preserved,notes",
     ...numbered.map((r) =>
-      [r.rowId, csvCell(byId.get(r.id)?.text ?? ""), csvCell(r.restored), "", "", ""].join(","),
+      [r.rowId, csvCell(r.original ?? byId.get(r.id)?.text ?? ""), csvCell(r.restored), "", "", ""].join(","),
     ),
   ].join("\n");
 
@@ -241,7 +289,7 @@ export function buildRatingSheet(
     ...numbered.map((r) => `${r.rowId},${r.id},${r.engine},${r.kind},${r.donor ?? ""}`),
   ].join("\n");
 
-  return { sheet, key, gold: rows.length - real.length };
+  return { sheet, key, goldWrong, goldRight: rows.length - real.length - goldWrong };
 }
 
 export const RATER_INSTRUCTIONS = `Rating instructions (PLAN.md §6)

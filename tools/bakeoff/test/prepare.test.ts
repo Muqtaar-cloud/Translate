@@ -140,10 +140,10 @@ describe("gold rows", () => {
       });
 
   it("mixes in about 5% gold rows, marked only in the key", () => {
-    const { key, gold } = buildRatingSheet(bigPrepared, bigOutputs);
-    expect(gold).toBe(goldCount(80, 20));
-    expect(gold).toBe(4);
-    expect(keyRows(key).filter((r) => r.kind === "gold")).toHaveLength(4);
+    const { key, goldWrong } = buildRatingSheet(bigPrepared, bigOutputs);
+    expect(goldWrong).toBe(goldCount(80, 20));
+    expect(goldWrong).toBe(4);
+    expect(keyRows(key).filter((r) => r.kind === "gold-wrong")).toHaveLength(4);
   });
 
   /**
@@ -155,7 +155,7 @@ describe("gold rows", () => {
     const { sheet, key } = buildRatingSheet(bigPrepared, bigOutputs);
     const lines = new Map(sheet.split("\n").slice(1).map((l) => [l.split(",")[0], l]));
 
-    for (const g of keyRows(key).filter((r) => r.kind === "gold")) {
+    for (const g of keyRows(key).filter((r) => r.kind === "gold-wrong")) {
       expect(g.donor).toBeTruthy();
       expect(g.donor).not.toBe(g.messageId);
       const line = lines.get(g.rowId) ?? "";
@@ -209,7 +209,7 @@ describe("gold rows", () => {
       "deepl",
     );
     const { key } = buildRatingSheet(p, o);
-    for (const g of keyRows(key).filter((r) => r.kind === "gold")) {
+    for (const g of keyRows(key).filter((r) => r.kind === "gold-wrong")) {
       const pair = new Set([g.messageId, g.donor]);
       expect(pair.has("s0") && pair.has("s1")).toBe(false);
     }
@@ -223,7 +223,7 @@ describe("gold rows", () => {
 
   it("adds none when there is no second message to borrow from, or when asked not to", () => {
     expect(goldCount(4, 1)).toBe(0);
-    expect(buildRatingSheet(bigPrepared, bigOutputs, { gold: false }).gold).toBe(0);
+    expect(buildRatingSheet(bigPrepared, bigOutputs, { gold: false }).goldWrong).toBe(0);
   });
 
   it("caps gold rows so a large sheet is not padded with traps", () => {
@@ -233,5 +233,66 @@ describe("gold rows", () => {
 
   it("tells raters that checks exist, without saying which rows they are", () => {
     expect(RATER_INSTRUCTIONS).toMatch(/checks with a known answer/);
+  });
+});
+
+describe("known-good gold rows", () => {
+  const corpus20 = parseCorpus(
+    Array.from({ length: 20 }, (_, i) =>
+      JSON.stringify({ id: `k${i}`, source: "es", text: `mensaje número ${i} del grupo` }),
+    ).join("\n"),
+  );
+  const p = prepare(corpus20, "en", { includeContext: false });
+  const out = ["a", "b", "c", "d"].flatMap((engine) =>
+    restoreOutputs(p, corpus20.map((m) => ({ id: m.id, output: `${engine} says ${m.id} topic${m.id}` })), engine),
+  );
+  const reference = Array.from({ length: 30 }, (_, i) => ({
+    source: "es",
+    text: `¿Me puedes llamar luego, vale ${i}?`.replace(String(i), "n".repeat(i + 1)) + ".",
+    translation: `Can you call me later, okay ${"n".repeat(i + 1)}?`,
+    origin: "test",
+  }));
+
+  const kindsOf = (key: string) =>
+    key.split("\n").slice(1).map((l) => l.split(",")[3]);
+
+  it("adds known-good rows from the reference file, budgeted like the known-wrong ones", () => {
+    const { key, goldWrong, goldRight } = buildRatingSheet(p, out, { reference });
+    expect(goldWrong).toBe(4);
+    expect(goldRight).toBe(4);
+    expect(kindsOf(key).filter((k) => k === "gold-right")).toHaveLength(4);
+  });
+
+  it("shows the reference sentence beside its human translation", () => {
+    const { sheet, key } = buildRatingSheet(p, out, { reference });
+    const rightIds = key
+      .split("\n")
+      .slice(1)
+      .filter((l) => l.endsWith(",gold-right,"))
+      .map((l) => l.split(",")[0]);
+    const lines = sheet.split("\n").filter((l) => rightIds.includes(l.split(",")[0]));
+    expect(lines).toHaveLength(4);
+    for (const line of lines) {
+      expect(line).toMatch(/"¿Me puedes llamar luego, vale n+\?","Can you call me later, okay n+\?"/);
+    }
+  });
+
+  it("drops the full stop chat rarely uses, so the checks don't look tidier than the chat", () => {
+    const one = [{ source: "es", text: "Te llamo mañana.", translation: "I'll call you tomorrow.", origin: "t" }];
+    const { sheet } = buildRatingSheet(p, out, { reference: [...one, ...one.map((r) => ({ ...r, text: "Te veo luego." }))] });
+    expect(sheet).toContain('"Te llamo mañana","I\'ll call you tomorrow."');
+  });
+
+  it("never uses a reference line that is also a real message in the sheet", () => {
+    const clash = [{ source: "es", text: "mensaje número 3 del grupo", translation: "group message 3", origin: "t" }];
+    const { goldRight, sheet } = buildRatingSheet(p, out, { reference: clash });
+    expect(goldRight).toBe(0);
+    expect(sheet).not.toContain("group message 3");
+  });
+
+  it("adds none without a reference file, and says nothing in the sheet about it", () => {
+    const { goldRight, sheet } = buildRatingSheet(p, out);
+    expect(goldRight).toBe(0);
+    expect(sheet).not.toMatch(/gold|reference/i);
   });
 });

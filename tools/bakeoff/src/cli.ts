@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   assertIgnored,
@@ -12,6 +12,13 @@ import {
   type RawMessage,
 } from "./collect.js";
 import { loadCorpus, summarise } from "./corpus.js";
+import {
+  formatReference,
+  loadReference,
+  parseTabbedPairs,
+  selectReference,
+  type ReferencePair,
+} from "./reference.js";
 import { AnthropicEngine } from "./engines/anthropic.js";
 import { DeepLEngine } from "./engines/deepl.js";
 import { EchoEngine } from "./engines/echo.js";
@@ -127,18 +134,24 @@ async function cmdRun(): Promise<void> {
   writeFileSync(join(OUT, "outputs.json"), JSON.stringify({ all, dnt, errors }, null, 2));
   const keyRows: string[] = [];
   const written: string[] = [];
+  const missingReference: string[] = [];
   for (const lang of [...new Set(prepared.map((p) => p.message.source))].sort()) {
     const mine = prepared.filter((p) => p.message.source === lang);
     const ids = new Set(mine.map((p) => p.message.id));
-    const { sheet, key, gold } = buildRatingSheet(
+    const refPath = join(OUT, `gold-good.${lang}.jsonl`);
+    const reference: ReferencePair[] = existsSync(refPath) ? loadReference(refPath) : [];
+    const { sheet, key, goldWrong, goldRight } = buildRatingSheet(
       mine,
       all.filter((o) => ids.has(o.id)),
-      { prefix: `${lang}-` },
+      { prefix: `${lang}-`, reference },
     );
     const file = `rating-sheet.${lang}.csv`;
     writeFileSync(join(OUT, file), sheet);
     keyRows.push(...key.split("\n").slice(1));
-    written.push(`${file} (${sheet.split("\n").length - 1} rows, ${gold} gold)`);
+    written.push(
+      `${file} (${sheet.split("\n").length - 1} rows: ${goldWrong} known-wrong, ${goldRight} known-good)`,
+    );
+    if (goldRight === 0) missingReference.push(lang);
   }
   writeFileSync(join(OUT, "rating-key.csv"), [KEY_HEADER, ...keyRows].join("\n"));
   writeFileSync(join(OUT, "RATER-INSTRUCTIONS.txt"), RATER_INSTRUCTIONS);
@@ -147,6 +160,13 @@ async function cmdRun(): Promise<void> {
   for (const w of written) console.log(`wrote ${OUT}/${w}  blinded, shuffled`);
   console.log(`      ${OUT}/rating-key.csv  (do not give this to raters: it marks the gold rows)`);
   console.log(`      ${OUT}/RATER-INSTRUCTIONS.txt`);
+  if (missingReference.length > 0) {
+    console.log(
+      `\n  No known-good rows for: ${missingReference.join(", ")}. A rater who answers n to ` +
+        "everything\n  would pass those sheets. Import reference pairs with `bakeoff gold-import` " +
+        "and re-run\n  before sending them.",
+    );
+  }
   console.log("\nSend each language's sheet and the instructions to its rater. §6 has the");
   console.log("paid fallback if that stalls — do not substitute an LLM judge for the");
   console.log("LLM tier, and do not substitute back-translation for any of it.");
@@ -186,8 +206,14 @@ async function cmdScore(): Promise<void> {
       {
         messageId: r["message_id"] ?? "",
         engine: r["engine"] ?? "",
-        // Keys written before gold rows existed have no kind column.
-        kind: r["kind"] === "gold" ? "gold" : "real",
+        // Keys written before gold rows existed have no kind column, and keys
+        // from before known-good rows called the mismatch kind plain "gold".
+        kind:
+          r["kind"] === "gold-right"
+            ? "gold-right"
+            : r["kind"] === "gold-wrong" || r["kind"] === "gold"
+              ? "gold-wrong"
+              : "real",
       },
     ]),
   );
@@ -238,6 +264,53 @@ async function cmdScore(): Promise<void> {
   });
 
   console.log(formatReport(scores, undefined, checks));
+}
+
+/**
+ * `gold-import <lang> <pairs.txt> [max]` — reference translations for
+ * known-good gold rows (see reference.ts).
+ *
+ * Takes Tatoeba's tab-separated pair format: download `<lang>-eng.zip` from
+ * manythings.org/anki, or sentence pairs from tatoeba.org/downloads, and pass
+ * the .txt inside. Writes tools/bakeoff/data/gold-good.<lang>.jsonl, which
+ * `run` picks up for that language's sheet. The data directory is git-ignored,
+ * so third-party text is never committed; the attribution travels with each
+ * pair, as CC-BY requires.
+ */
+async function cmdGoldImport(): Promise<void> {
+  const lang = process.argv[3];
+  const file = process.argv[4];
+  const max = Number(process.argv[5] ?? 500);
+  if (!lang || !file) {
+    throw new Error(
+      "usage: bakeoff gold-import <lang> <pairs.txt> [max]\n\n" +
+        "  pairs.txt   Tatoeba's tab-separated format: English<TAB>sentence[<TAB>attribution],\n" +
+        "              e.g. spa.txt from manythings.org/anki/spa-eng.zip\n",
+    );
+  }
+
+  const pairs = parseTabbedPairs(
+    readFileSync(file, "utf8"),
+    lang,
+    "Tatoeba (tatoeba.org), CC-BY 2.0 FR; per-sentence attribution not in the source file",
+  );
+  if (pairs.length === 0) throw new Error(`${file}: no tab-separated pairs found`);
+  const { kept, rejected } = selectReference(pairs, max);
+
+  mkdirSync(OUT, { recursive: true });
+  const out = join(OUT, `gold-good.${lang}.jsonl`);
+  writeFileSync(out, formatReference(kept));
+
+  console.log(`read ${pairs.length} pairs, kept ${kept.length} that read like chat`);
+  for (const [reason, n] of Object.entries(rejected)) {
+    if (n > 0) console.log(`  dropped ${String(n).padStart(6)}  ${reason}`);
+  }
+  console.log(`\nwrote ${out}`);
+  console.log(
+    "\nThese are community translations. Some are loose or wrong, which is why a rater may\n" +
+      "miss a few known-good rows and still pass. If someone who reads the language can skim\n" +
+      "this file and delete the bad lines, the check gets sharper.",
+  );
 }
 
 /**
@@ -335,6 +408,7 @@ function reordinal(messages: readonly RawMessage[], offset: number): RawMessage[
 const commands: Record<string, () => Promise<void>> = {
   probe: cmdProbe,
   collect: cmdCollect,
+  "gold-import": cmdGoldImport,
   run: cmdRun,
   score: cmdScore,
 };
@@ -344,9 +418,10 @@ const handler = command ? commands[command] : undefined;
 
 if (!handler) {
   console.error(
-    "usage: bakeoff <probe|collect|run|score>\n\n" +
+    "usage: bakeoff <probe|collect|gold-import|run|score>\n\n" +
       "  probe [pairs]                     Phase 0a: what this machine can actually do\n" +
       "  collect <source> <file...>        build the 0b corpus from a client export\n" +
+      "  gold-import <lang> <pairs.txt>    reference translations for known-good rows\n" +
       "  run <corpus.jsonl> [engines]      translate + build a blinded rating sheet\n" +
       "  score [filled-sheet.csv ...]      rater gold checks, Wilson intervals, the verdict\n",
   );

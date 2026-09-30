@@ -82,14 +82,17 @@ export function scoreEngine(engine: string, ratings: Rating[]): EngineScore {
 }
 
 /**
- * A rater must call at least this share of gold rows (known-wrong
- * translations) wrong. Below it, their ratings cannot carry the gate: a rater
- * who waves through fluent-but-wrong translations is measuring fluency, and
- * fluency is the one thing every engine already has.
+ * A rater must answer at least this share of each kind of gold row correctly:
+ * call the known-wrong translations wrong, and the known-good ones right.
+ * Below it on either, their ratings cannot carry the gate. A rater who waves
+ * through fluent-but-wrong translations is measuring fluency, which every
+ * engine already has; one who rejects correct translations too is not reading.
  *
- * 0.8 rather than 1.0 because a mismatch can occasionally land close in
- * meaning to its host ("ok" beside "vale"), and one such row should not
- * disqualify a careful rater.
+ * 0.8 rather than 1.0 because neither kind is perfectly clean. A mismatch can
+ * land close in meaning to its host ("ok" beside "vale"), and the known-good
+ * rows come from Tatoeba, where a sample of 20 Spanish pairs already held one
+ * calque: "Dadme un anillo" (hand me a ring, the jewellery) given as
+ * "Give me a ring" (call me). A careful rater should mark that one n.
  */
 export const GOLD_CATCH_FLOOR = 0.8;
 
@@ -99,7 +102,7 @@ export const ALL_NO_WARNING = 0.95;
 export interface KeyEntry {
   messageId: string;
   engine: string;
-  kind: "real" | "gold";
+  kind: "real" | "gold-wrong" | "gold-right";
 }
 
 /** One filled row: `null` where the rater left the column blank. */
@@ -112,10 +115,16 @@ export interface SheetAnswer {
 export interface RaterCheck {
   /** Which sheet — in practice, which rater and language. */
   sheet: string;
-  gold: number;
-  /** Gold rows the rater correctly marked meaning_preserved = n. */
-  caught: number;
-  /** `null` when the sheet has no gold rows, so the rater is unchecked. */
+  /** Known-wrong rows answered, and how many the rater marked n. */
+  wrongGold: number;
+  wrongCaught: number;
+  /** Known-good rows answered, and how many the rater marked y. */
+  rightGold: number;
+  rightCaught: number;
+  /**
+   * False if either kind falls under the floor. `null` when the sheet has no
+   * gold rows of either kind, so the rater is unchecked.
+   */
   passed: boolean | null;
   realRated: number;
   realMarkedWrong: number;
@@ -133,17 +142,24 @@ export function collectRatings(
   key: ReadonlyMap<string, KeyEntry>,
 ): { ratings: Rating[]; check: RaterCheck } {
   const ratings: Rating[] = [];
-  let gold = 0;
-  let caught = 0;
+  let wrongGold = 0;
+  let wrongCaught = 0;
+  let rightGold = 0;
+  let rightCaught = 0;
   let realMarkedWrong = 0;
 
   for (const a of answers) {
     const k = key.get(a.rowId);
     if (!k || a.meaningPreserved === null) continue; // unknown or unratable
 
-    if (k.kind === "gold") {
-      gold++;
-      if (!a.meaningPreserved) caught++;
+    if (k.kind === "gold-wrong") {
+      wrongGold++;
+      if (!a.meaningPreserved) wrongCaught++;
+      continue;
+    }
+    if (k.kind === "gold-right") {
+      rightGold++;
+      if (a.meaningPreserved) rightCaught++;
       continue;
     }
 
@@ -156,13 +172,21 @@ export function collectRatings(
     });
   }
 
+  const floor = (hit: number, of: number): boolean | null =>
+    of === 0 ? null : hit / of >= GOLD_CATCH_FLOOR;
+  const verdicts = [floor(wrongCaught, wrongGold), floor(rightCaught, rightGold)].filter(
+    (v): v is boolean => v !== null,
+  );
+
   return {
     ratings,
     check: {
       sheet,
-      gold,
-      caught,
-      passed: gold === 0 ? null : caught / gold >= GOLD_CATCH_FLOOR,
+      wrongGold,
+      wrongCaught,
+      rightGold,
+      rightCaught,
+      passed: verdicts.length === 0 ? null : verdicts.every(Boolean),
       realRated: ratings.length,
       realMarkedWrong,
     },
@@ -209,20 +233,39 @@ export function formatReport(
   }
 
   if (checks.length > 0) {
-    lines.push("  rater checks (gold rows: known-wrong translations mixed into each sheet)");
+    lines.push("  rater checks (gold rows: known answers mixed into each sheet)");
     for (const c of checks) {
       if (c.passed === null) {
         lines.push(`    ${c.sheet}: no gold rows answered. This rater is unchecked.`);
-      } else {
-        const verdictText = c.passed
-          ? "PASS"
-          : `FAIL, marked ${c.gold - c.caught} of ${c.gold} known-wrong translations as correct`;
-        lines.push(`    ${c.sheet}: caught ${c.caught}/${c.gold}  ${verdictText}`);
+        continue;
+      }
+      const parts = [
+        c.wrongGold > 0 ? `known-wrong ${c.wrongCaught}/${c.wrongGold}` : null,
+        c.rightGold > 0 ? `known-good ${c.rightCaught}/${c.rightGold}` : null,
+      ].filter(Boolean);
+      lines.push(`    ${c.sheet}: ${parts.join(", ")}  ${c.passed ? "PASS" : "FAIL"}`);
+
+      if (c.wrongGold > 0 && c.wrongCaught / c.wrongGold < GOLD_CATCH_FLOOR) {
+        lines.push(
+          `      marked ${c.wrongGold - c.wrongCaught} of ${c.wrongGold} known-wrong translations as correct`,
+        );
+      }
+      if (c.rightGold > 0 && c.rightCaught / c.rightGold < GOLD_CATCH_FLOOR) {
+        lines.push(
+          `      marked ${c.rightGold - c.rightCaught} of ${c.rightGold} known-good translations as wrong`,
+        );
+      }
+      if (c.rightGold === 0) {
+        lines.push(
+          "      no known-good rows in this sheet, so a rater who answers n to everything would pass. " +
+            "Import reference pairs (bakeoff gold-import) and re-run.",
+        );
       }
       if (c.realRated >= 20 && c.realMarkedWrong / c.realRated >= ALL_NO_WARNING) {
         lines.push(
-          `      marked ${pct(c.realMarkedWrong / c.realRated)} of real rows wrong. Gold rows cannot tell a ` +
-            "harsh rater from bad engines; have someone spot-check 20 rows before accepting a FAIL.",
+          `      marked ${pct(c.realMarkedWrong / c.realRated)} of real rows wrong. Gold rows show whether a ` +
+            "rater is reading, not whether they are unusually strict; have someone spot-check 20 rows " +
+            "before accepting a FAIL.",
         );
       }
     }
