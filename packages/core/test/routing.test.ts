@@ -96,3 +96,17 @@ describe("route", () => {
     expect(route(req(), botPolicy).kind).toBe("cloud-mt");
   });
 });
+
+describe("readsLanguage", () => {
+  it("treats a script or region subtag as the same language", async () => {
+    const { readsLanguage } = await import("../src/routing.js");
+    expect(readsLanguage(["hi"], "hi-Latn")).toBe(true);
+    expect(readsLanguage(["en"], "en-GB")).toBe(true);
+    expect(readsLanguage(["en"], "hi-Latn")).toBe(false);
+  });
+
+  it("skips romanised Hindi for someone who reads Hindi", () => {
+    const r = route(req({ source: "hi-Latn" }), policy("available", { knownLanguages: ["en", "hi"] }));
+    expect(r).toEqual({ kind: "skip", reason: "known-language" });
+  });
+});

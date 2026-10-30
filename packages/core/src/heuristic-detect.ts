@@ -78,6 +78,32 @@ const ORTHOGRAPHY: [RegExp, string, number][] = [
 ];
 
 /**
+ * Hindi written in Latin letters ("kya kar rahe ho aaj shaam ko"), labelled
+ * `hi-Latn` (BCP 47), the tag Chrome's Translator accepts as a source.
+ *
+ * Many Indian group chats are written this way rather than in Devanagari, and
+ * before this the detector declined every such line: the only thing it knew
+ * about Hindi was the script.
+ *
+ * Distinctive words only. Hindi's commonest little words are left out because
+ * they are words elsewhere too: "ho" (Italian "I have"), "mein" (German), "se"
+ * (Spanish, French, Portuguese), and ka/ki/ke/ko/na/to/me/main. A line needs
+ * two distinct hits, so a single "hai" in Italian ("hai fame?") is not enough.
+ * Romanised Urdu is largely the same text; it is labelled hi-Latn as well,
+ * which is the honest limit of a word list.
+ */
+const HINDI_LATIN = new Set([
+  "hai", "hain", "nahi", "nahin", "kya", "kyun", "kyon", "kaise", "kahan", "kab", "kitne", "kitna",
+  "mujhe", "mujhko", "tujhe", "tumhe", "tumko", "tumhara", "tumhari", "mera", "meri", "mere", "tera",
+  "teri", "hum", "humein", "aap", "aapka", "aapko", "yaar", "bhai", "accha", "acha", "achha", "theek",
+  "thik", "abhi", "bahut", "bohot", "kuch", "raha", "rahe", "rahi", "gaya", "gayi", "gaye", "karo",
+  "karna", "karte", "karta", "kiya", "hoon", "hun", "bhi", "toh", "wala", "wali", "wale", "lekin",
+  "phir", "dekho", "chalo", "aaj", "kal", "baad", "pehle", "saath", "liye", "tum", "unko", "usko",
+  "haan", "nahi", "batao", "dena", "lena", "jana", "aana", "milte", "baje", "kitni", "kaun", "sabka",
+]);
+const HINDI_LATIN_MIN_HITS = 2;
+
+/**
  * Best-effort detection.
  *
  * Returns an empty list rather than a guess when there is not enough to go on.
@@ -109,6 +135,8 @@ export function heuristicDetect(text: string): Detection[] {
   for (const [pattern, lang, weight] of ORTHOGRAPHY) {
     if (pattern.test(trimmed)) tally.set(lang, (tally.get(lang) ?? 0) + weight);
   }
+  const hindiHits = new Set(words.filter((w) => HINDI_LATIN.has(w))).size;
+  if (hindiHits >= HINDI_LATIN_MIN_HITS) tally.set("hi-Latn", hindiHits);
 
   const scores = [...tally]
     .map(([lang, hits]) => ({ lang, hits }))

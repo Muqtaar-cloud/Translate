@@ -56,3 +56,28 @@ describe("shared letters and words", () => {
     expect(lang("Quisiera ser tu novio.")).not.toBe("fr");
   });
 });
+
+/**
+ * Hindi in Latin letters. Before this, every such line was declined. The
+ * positives below were written for this test, not collected, so they show the
+ * rule works rather than how often it does; the false-positive check that
+ * matters ran on 18,000 real Tatoeba sentences in nine languages and found none.
+ */
+describe("romanised Hindi", () => {
+  it("labels it hi-Latn", () => {
+    expect(lang("kya kar rahe ho aaj shaam ko")).toBe("hi-Latn");
+    expect(lang("mujhe nahi pata yaar, tum batao")).toBe("hi-Latn");
+    expect(lang("bro meeting kitne baje hai?")).toBe("hi-Latn");
+  });
+
+  it("still labels Devanagari Hindi hi", () => {
+    expect(lang("क्या कर रहे हो आज शाम को")).toBe("hi");
+  });
+
+  it("does not take one shared word as Hindi", () => {
+    // "hai" is Italian for "you have": one hit is not enough.
+    expect(lang("hai fame? possiamo mangiare qualcosa insieme")).not.toBe("hi-Latn");
+    expect(lang("what are you doing this evening")).not.toBe("hi-Latn");
+    expect(lang("kamu sudah makan belum? aku lagi di rumah")).not.toBe("hi-Latn");
+  });
+});

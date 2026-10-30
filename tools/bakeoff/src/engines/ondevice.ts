@@ -62,9 +62,38 @@ function resolveChromium(): string | undefined {
   return undefined;
 }
 
+/**
+ * Lines the probe asks Chrome's own detector about, when it can run.
+ *
+ * Romanised Hindi is how many Indian group chats are written, and what
+ * Chrome's LanguageDetector says about it decides what the extension does with
+ * it (see apps/extension/test/hinglish.test.ts). It could not be measured where
+ * this was written: the detector was `unavailable` there. Written for the
+ * probe, not collected; the controls are the same lines in Devanagari and
+ * English.
+ */
+export const DETECTION_SAMPLE: readonly string[] = [
+  "kya kar rahe ho aaj shaam ko",
+  "bhai kal milte hain college ke baad",
+  "mujhe nahi pata yaar, tum batao",
+  "bro meeting kitne baje hai?",
+  "yaar exam ki tension ho rahi hai",
+  "क्या कर रहे हो आज शाम को",
+  "what are you doing this evening",
+];
+
 export interface ProbeResult {
   apiPresent: boolean;
   detectorPresent: boolean;
+  /**
+   * Not just whether the API exists. Measured: it can be present and
+   * `unavailable`, and the extension uses the built-in detector only when it is
+   * `available` — otherwise it detects nothing, and no message is translated
+   * until someone clicks the globe.
+   */
+  detectorAvailability: string;
+  /** Top three guesses per DETECTION_SAMPLE line, when the detector could run. */
+  detections?: { text: string; guesses: string[] }[];
   pairs: Record<string, string>;
   note?: string;
 }
@@ -125,12 +154,20 @@ export class OnDeviceEngine implements Engine {
       return {
         apiPresent: Boolean(g.Translator),
         detectorPresent: Boolean(g.LanguageDetector),
+        detectorAvailability: g.LanguageDetector
+          ? await (g.LanguageDetector as { availability(): Promise<string> }).availability().catch(
+              (e: unknown) => `error: ${String(e)}`,
+            )
+          : "absent",
         pairs: out,
       };
     }, pairs);
 
+    const detections = await this.detectSample(page, result.detectorAvailability);
+
     return {
       ...result,
+      ...(detections ? { detections } : {}),
       ...(result.apiPresent
         ? {}
         : {
@@ -140,6 +177,63 @@ export class OnDeviceEngine implements Engine {
               "138+ / Edge 148+ desktop profile before drawing conclusions about §4.1.",
           }),
     };
+  }
+
+  /**
+   * Runs DETECTION_SAMPLE through Chrome's own detector, if it can run here.
+   *
+   * A `downloadable` model needs a user gesture to fetch, and a Playwright
+   * click is a trusted one, so the probe clicks rather than giving up. On a
+   * machine where the model is `unavailable` there is nothing to measure, and
+   * the probe says so instead of inventing an answer.
+   */
+  private async detectSample(
+    page: Page,
+    availability: string,
+  ): Promise<{ text: string; guesses: string[] }[] | undefined> {
+    if (!["available", "downloadable", "downloading"].includes(availability)) return undefined;
+
+    await page.evaluate(() => {
+      const w = window as unknown as { __det?: unknown; __detErr?: string };
+      const button = document.createElement("button");
+      button.id = "polyglot-probe-detector";
+      button.textContent = "detect";
+      document.body.append(button);
+      button.addEventListener("click", async () => {
+        try {
+          const api = (globalThis as unknown as { LanguageDetector: { create(): Promise<unknown> } })
+            .LanguageDetector;
+          w.__det = await api.create();
+        } catch (e) {
+          w.__detErr = String(e);
+        }
+      });
+    });
+    await page.click("#polyglot-probe-detector");
+
+    const deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      const state = await page.evaluate(() => {
+        const w = window as unknown as { __det?: unknown; __detErr?: string };
+        return { ready: Boolean(w.__det), error: w.__detErr ?? null };
+      });
+      if (state.error) return undefined;
+      if (state.ready) break;
+      await page.waitForTimeout(1000);
+    }
+
+    return page.evaluate(async (sample) => {
+      const w = window as unknown as {
+        __det?: { detect(t: string): Promise<{ detectedLanguage: string; confidence: number }[]> };
+      };
+      if (!w.__det) return undefined;
+      const out: { text: string; guesses: string[] }[] = [];
+      for (const text of sample) {
+        const r = await w.__det.detect(text);
+        out.push({ text, guesses: r.slice(0, 3).map((x) => `${x.detectedLanguage} ${x.confidence.toFixed(2)}`) });
+      }
+      return out;
+    }, DETECTION_SAMPLE as string[]);
   }
 
   async translate(items: EngineItem[]): Promise<EngineOutput[]> {

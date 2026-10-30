@@ -1,5 +1,6 @@
 import {
   mask,
+  readsLanguage,
   resolve,
   restore,
   route,
@@ -36,6 +37,15 @@ import { TranslationLayer, type LayerState } from "./layer.js";
  * Not a cache key (those are SHA-256, in core) — this is the *node* key, and it
  * runs on every mutation, so it has to be fast rather than collision-proof.
  */
+/** "en" -> "English", falling back to the code where the runtime has no names. */
+function languageName(code: LanguageCode): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 export function fingerprint(text: string): string {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) {
@@ -357,7 +367,9 @@ export class RenderLoop {
     layer.render({ kind: "escalating" });
 
     const detections = await this.deps.detect(extracted.text);
-    const source = detections[0]?.lang ?? "auto";
+    // "auto" tells the LLM to identify the language itself, which it does well,
+    // including for romanised or mixed text that the detector cannot place.
+    const source = this.explicitSource(detections) ?? "auto";
     const target = this.deps.target;
 
     const context = collectContext(this.deps.adapter, this.root, extracted.id);
@@ -410,6 +422,28 @@ export class RenderLoop {
     }
   }
 
+  /**
+   * The source language for a translation the user explicitly asked for.
+   *
+   * Clicking "translate" on a message is the user saying it is not in a
+   * language they read, so a detection that says otherwise is the detector
+   * being wrong, not a reason to skip. Takes the best-ranked guess that is not
+   * a language they read; null when there is none.
+   *
+   * Measured: before this, the globe re-ran the automatic skip rule. A message
+   * the detector called English — the likeliest misreading of romanised Hindi,
+   * Latin letters full of English words — routed en → en, was skipped, and the
+   * click did nothing at all. And a message the detector could not place went
+   * out as source "auto", which Chrome's Translator rejects ("Invalid language
+   * tag: auto") after first offering to download an "auto → en" pack.
+   */
+  private explicitSource(detections: readonly Detection[]): LanguageCode | null {
+    const guess = detections.find(
+      (d) => d.lang !== "und" && !readsLanguage(this.deps.knownLanguages, d.lang),
+    );
+    return guess?.lang ?? null;
+  }
+
   /** Hover globe: translate regardless of the skip rules that suppressed it. */
   private async forceTranslate(
     extracted: ExtractedMessage,
@@ -417,7 +451,20 @@ export class RenderLoop {
   ): Promise<void> {
     layer.render({ kind: "pending" });
     const detections = await this.deps.detect(extracted.text);
-    const source = detections[0]?.lang ?? "auto";
+    const source = this.explicitSource(detections);
+    if (source === null) {
+      // Say what happened rather than nothing. The failed state offers the LLM
+      // when it is configured, and the LLM needs no source language at all.
+      const top = detections[0]?.lang;
+      layer.render({
+        kind: "failed",
+        reason:
+          top && top !== "und"
+            ? `this looks like ${languageName(top)}, which you read, so there is nothing to translate it from`
+            : "couldn't tell what language this is",
+      });
+      return;
+    }
     layer.render(await this.translate(source, extracted.text));
   }
 
@@ -460,7 +507,7 @@ export class RenderLoop {
     let best: LanguageCode | null = null;
     let bestCount = 0;
     for (const [lang, count] of this.languageTally) {
-      if (this.deps.knownLanguages.includes(lang)) continue;
+      if (readsLanguage(this.deps.knownLanguages, lang)) continue;
       if (count > bestCount) {
         best = lang;
         bestCount = count;

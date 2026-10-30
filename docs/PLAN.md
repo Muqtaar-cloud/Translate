@@ -452,13 +452,50 @@ French, Chinese, Turkish and Hindi, plus Spanish and Portuguese.**
   and Hindi are detected 100% of the time, since their scripts decide it.
   Latin-script languages are still declined 17–49% of the time; a declined
   message goes to review, which is the safe failure.
-- **Romanised Hindi is not detected at all.** "kya kar rahe ho aaj shaam ko",
-  "bhai kal milte hain college ke baad": the detector declines every one,
-  since the only thing it knows about Hindi is Devanagari. If Hindi matters
-  because users meet it, it most likely arrives romanised, and that affects
-  more than the corpus: the extension's detection, the routing decision and
-  translation quality for Hinglish are all unmeasured. This needs its own
-  question before anyone counts Hindi as supported.
+- **Romanised Hindi** ("kya kar rahe ho aaj shaam ko") is how many Indian
+  group chats are written. Looked into on 2026-10-30; what was found, by part:
+  - *Bot and corpus collector* (`heuristicDetect`): declined 28 of 30 such
+    lines and mislabelled the other two as German and French. It now labels
+    them `hi-Latn` from Hindi's everyday words, excluding the ones that are
+    words elsewhere too (*ho*, *mein*, *se*…) and needing two distinct hits.
+    22 of 30 lines are now labelled, none wrongly; but those lines were
+    written for the test, so the rate is indicative only. The number that
+    matters is false positives: none in 18,000 real Tatoeba sentences across
+    nine languages, Italian (*hai*) and German (*mein*) included. Romanised
+    Urdu is largely the same text and will be labelled `hi-Latn` too.
+  - *Extension*: uses Chrome's LanguageDetector, which was `unavailable` where
+    this was measured, so **what Chrome says about romanised Hindi is still
+    unmeasured**. `bakeoff probe` now asks it about romanised Hindi whenever it
+    can run, so a probe on a real Chrome profile answers this.
+    Chrome's Translator does accept `hi-Latn` as a source (`downloadable`);
+    whether it translates it well is part of the same unmeasured question.
+  - *The hover globe was broken for exactly this case, and fixed.* It re-ran
+    the automatic skip rule, so a message the detector called English (the
+    likeliest misreading of Latin letters full of English words) routed
+    en → en and the click did nothing. An undetected message went out as
+    source `auto`, which Chrome rejects after first offering an "auto → en"
+    pack download. The globe now uses the best guess that is not a language
+    the reader reads, or says what happened and offers the LLM, which is
+    asked to identify the language itself rather than to translate "auto" or
+    "English into English".
+  - *Routing* now compares primary language subtags, so someone who reads
+    Hindi is not shown translations of `hi-Latn`.
+  - *The bot* will now try `hi-Latn`, and the self-hosted model rejects it
+    (`unmapped language pair`), so the bot replies that translation failed
+    rather than that it cannot tell the language. NLLB has no romanised-Hindi
+    code; a real fix there is transliteration or a different model.
+
+- **A larger question this turned up: when Chrome's detector is not
+  `available`, the extension detects nothing at all.** It uses the built-in
+  detector only when it is `available`, never triggers its download, and its
+  fallback returns no detections, so every message renders idle until someone
+  clicks the globe. Where this was measured the detector was `unavailable`.
+  If that is common on real machines, or if it is `downloadable` on a fresh
+  profile, the extension does not work out of the box. Phase 0a on a real
+  profile must check `LanguageDetector:` in the probe output (it now prints
+  it). If it is not `available`, the options are triggering the download from
+  the first click, or using `heuristicDetect` as the fallback, which now
+  covers romanised Hindi too.
 
 Also counted in this phase, free: **code-switching frequency** (§4.5) and
 **self-hosted MT quality** (§8).

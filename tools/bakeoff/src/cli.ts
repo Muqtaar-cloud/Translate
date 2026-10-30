@@ -65,7 +65,7 @@ function selectEngines(names: string[]): Engine[] {
 }
 
 async function cmdProbe(): Promise<void> {
-  const pairs = (process.argv[3] ?? "es->en,pt->en,ar->en,fr->en")
+  const pairs = (process.argv[3] ?? "es->en,pt->en,fr->en,zh->en,tr->en,hi->en,hi-Latn->en")
     .split(",")
     .map((p) => {
       const [source, target] = p.split("->");
@@ -78,8 +78,21 @@ async function cmdProbe(): Promise<void> {
     console.log("Phase 0a — capability probe (PLAN.md §4.1, §4.2)\n");
     console.log(`  Translator API present:      ${result.apiPresent}`);
     console.log(`  LanguageDetector present:    ${result.detectorPresent}`);
+    console.log(`  LanguageDetector:            ${result.detectorAvailability}`);
+    if (result.detectorAvailability !== "available") {
+      console.log(
+        "    The extension uses the built-in detector only when it is `available`. Otherwise it\n" +
+          "    detects nothing, and no message is translated until someone clicks the globe.",
+      );
+    }
     for (const [pair, state] of Object.entries(result.pairs)) {
       console.log(`  ${pair.padEnd(12)} ${state}`);
+    }
+    if (result.detections) {
+      console.log("\n  What Chrome's detector says (romanised Hindi first; see hinglish.test.ts):");
+      for (const d of result.detections) console.log(`    ${d.text.padEnd(38)} ${d.guesses.join(", ")}`);
+    } else {
+      console.log("\n  Chrome's detector could not run here, so romanised Hindi detection is unmeasured.");
     }
     if (result.note) console.log(`\n  NOTE: ${result.note}`);
     console.log(

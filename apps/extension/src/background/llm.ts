@@ -47,7 +47,16 @@ function prompt(request: TranslationRequest): string {
     : "";
 
   return (
-    `${context}Translate this ${request.source} group-chat message into ${request.target}.\n\n` +
+    `${context}${
+      request.source === "auto"
+        ? // The detector could not place it, or placed it in the reader's own
+          // language and the reader disagreed. Say so, rather than "translate
+          // this auto message" or "translate this English message into English".
+          `Translate this group-chat message into ${request.target}. Its language was not ` +
+          `detected: identify it yourself. It may be written in Latin letters rather than its ` +
+          `usual script (for example Hindi as "kya kar rahe ho"), or mix languages.`
+        : `Translate this ${request.source} group-chat message into ${request.target}.`
+    }\n\n` +
     `Message:\n${request.text}\n\n` +
     `Rules:\n` +
     `- This is casual group chat. Preserve the register, tone and humour; do not formalise it.\n` +

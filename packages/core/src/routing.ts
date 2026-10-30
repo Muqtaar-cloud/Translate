@@ -47,10 +47,23 @@ export interface RoutingPolicy {
  * rather than by anyone deciding it. So it returns its own terminal route and
  * the caller must prompt.
  */
+/**
+ * Whether the reader already reads `lang`, comparing primary language subtags.
+ *
+ * "hi-Latn" (Hindi in Latin letters) is Hindi to someone who reads Hindi, and
+ * "en-GB" is English to someone who reads "en". An exact string match would
+ * translate a reader's own language back to them the moment a detector
+ * returned a script or region subtag.
+ */
+export function readsLanguage(known: readonly LanguageCode[], lang: LanguageCode): boolean {
+  const base = (l: string): string => l.split("-")[0]?.toLowerCase() ?? l;
+  return known.some((k) => base(k) === base(lang));
+}
+
 export function route(req: TranslationRequest, policy: RoutingPolicy): Route {
   const { source, target } = req;
 
-  if (policy.knownLanguages.includes(source)) {
+  if (readsLanguage(policy.knownLanguages, source)) {
     return { kind: "skip", reason: "known-language" };
   }
 
